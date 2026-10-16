@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-QbLH6uOWebDM/8miVVtIY2GF2HVQWVvBx3HDF6yejq4='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://rxvcjdwmvxhwbdwncfhj.supabase.co https://world.openfoodfacts.org https://search.openfoodfacts.org; font-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
-<title>Nutrition | Today</title>
+<title>Nutrition | Home</title>
 <meta name="description" content="Free calorie, macro and hydration tracker with about 7,800 foods. Log in a tap, set personal targets, track fasting and supplements. No account needed.">
 <meta name="theme-color" content="#65A30D">
 <meta name="application-name" content="Nutrition">
@@ -17,13 +17,13 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script>(function(){var t=null;try{t=localStorage.getItem('nutrition.theme')}catch(e){}document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light')})();</script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"nutrition.mcbflow.com","alternateName":"Nutrition","url":"https://nutrition.mcbflow.com/","description":"Free calorie, macro and hydration tracker with about 7,800 foods. Log in a tap, set personal targets, track fasting and supplements. No account needed.","applicationCategory":"HealthApplication","operatingSystem":"Any (runs in a web browser)","browserRequirements":"Requires JavaScript","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Matthew Broyer","url":"https://matthewbroyer.com/"}}</script>
-<link rel="stylesheet" href="mb-suite-core.css?v=1.8">
-<link rel="stylesheet" href="mb-suite-cutouts.css?v=1.8">
-<link rel="stylesheet" href="mb-suite-sidebar.css?v=1.8">
-<link rel="stylesheet" href="mb-suite-v3.css?v=1.8">
+<link rel="stylesheet" href="mb-suite-core.css?v=1.9">
+<link rel="stylesheet" href="mb-suite-cutouts.css?v=1.9">
+<link rel="stylesheet" href="mb-suite-sidebar.css?v=1.9">
+<link rel="stylesheet" href="mb-suite-v3.css?v=1.9">
 <style>
 /* ===== nutrition.mcbflow.com · app styles on MB Suite tokens (accent: Avocado) =====
-   Data colors (app-specific, always paired with a text label): protein = red, carbs = blue, fat = gold (shared with mbmealprep), drinks = water blue.
+   Data colors (app-specific, always paired with a text label): protein = red, carbs = blue, fat = gold (shared with Meal Prep), drinks = water blue.
    --mp-t/--mc-t/--mf-t are darker text versions so colored numbers stay readable on white. */
 :root{
   --mp:#DD4B39; --mc:#3B7DC4; --mf:#DE9E1F; --mp-t:#B8321F; --mc-t:#2A63A3; --mf-t:#8C6200; --bac:var(--accent);
@@ -42,9 +42,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 .grid{display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}
 @media(min-width:900px){.grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.span2{grid-column:1/-1}}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:16px;min-width:0}
-h2{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;font-weight:650;display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:20px}
-h2 .link,h2 .num{text-transform:none;letter-spacing:0;font-size:13px;font-weight:600}
-h2 .num{color:var(--ink-2)}
+:where(.wrap) h2:not(.mb-set-h){font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;font-weight:650;display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:20px}
+.wrap h2 .link,.wrap h2 .num{text-transform:none;letter-spacing:0;font-size:13px;font-weight:600}
+.wrap h2 .num{color:var(--ink-2)}
 h3{font-size:18px;font-weight:650;margin:0 0 6px;line-height:1.25;letter-spacing:-.01em}
 .num{font-variant-numeric:tabular-nums}
 .empty{color:var(--ink-2);font-size:13.5px;margin:8px 0 0;line-height:1.5}
@@ -223,9 +223,20 @@ details.qa[open]{padding-bottom:12px}
 .src{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--border);font-size:13.5px}
 .src:first-child{border-top:0}
 .src span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* ---- settings ---- */
-.toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;padding:6px 0;border-top:1px solid var(--border);font-weight:500;cursor:pointer}
-.toggle input{width:20px;height:20px}
+/* ---- settings page (.mb-set from mb-suite-topbar.css; these are Nutrition's own controls inside it) ---- */
+.mb-set-c input[type=number],.mb-set-c select{width:150px}
+.mb-set-c input[type=checkbox]{width:20px;height:20px;margin:0;accent-color:var(--accent)}
+label.mb-set-row{cursor:pointer}
+.mb-set .mb-about{margin-top:0}
+[data-mb-install]:not([hidden]) + .mb-inst-fb{display:none}   /* fallback line only while MBInstall has nothing to offer */
+.mb-inst-fb p{margin:0;font-size:13px;line-height:1.5;color:var(--ink-2)}
+.mb-set-sub{padding:0 0 14px}
+.mb-set-sub .row{margin-top:-4px}
+.mb-set-sub .empty{margin-top:6px}
+.mb-set-card.pad>.row:first-child label.f{margin-top:0}
+.mb-set-card.pad>.tagchks:first-child{margin-top:0}
+@media(max-width:767px){.mb-set-c input[type=number],.mb-set-c select{width:100%;max-width:260px}
+  label.mb-set-row{flex-wrap:nowrap}label.mb-set-row .mb-set-c{flex:none}}   /* on/off rows keep the checkbox at the right */
 .bac h2{align-items:center}
 .bacbadge{font-size:11px;font-weight:650;letter-spacing:.03em;text-transform:none;padding:2px 9px;border-radius:999px;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
 .bacbadge.up{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--ink)}
@@ -255,6 +266,7 @@ details.qa[open]{padding-bottom:12px}
 .bactip span{color:var(--muted);font-size:11.5px}
 .bacaxis{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px}
 fieldset.libsave{border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 12px 4px;margin:10px 0 0}
+.alcwhen .row{grid-template-columns:repeat(2,minmax(0,170px))}
 fieldset.libsave legend{font-size:11px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:0 4px}
 .charthint{font-size:11px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted)}
 @media (hover:none){.charthint{font-size:0}.charthint::after{content:"Tap a bar";font-size:11px}}
@@ -343,8 +355,9 @@ button.wcol{border:0;background:none;padding:0;font:inherit;color:inherit;border
 .faq details:first-of-type{border-top:0}
 .faq summary{min-height:44px;display:flex;align-items:center;font-weight:600;cursor:pointer}
 .faq details p{margin:0 0 12px;color:var(--ink-2);line-height:1.55;font-size:13.5px}
-/* ---- settings: install + about stack ---- */
-.endcards{display:grid;gap:0}
+/* ---- What's new sheet ---- */
+.wn{margin:10px 0 0;padding-left:20px;font-size:14px;line-height:1.5;color:var(--ink-2)}
+.wn li+li{margin-top:6px}
 /* ---- toast ---- */
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:90;background:var(--ink);color:var(--surface);border-radius:var(--r);padding:8px 8px 8px 14px;
   display:flex;gap:12px;align-items:center;box-shadow:var(--shadow-pop);max-width:calc(100% - 32px);font-weight:500;font-size:13.5px;min-height:44px}
@@ -357,29 +370,17 @@ button.wcol{border:0;background:none;padding:0;font:inherit;color:inherit;border
   background:var(--g-pri,var(--accent));color:var(--accent-ink);box-shadow:var(--shadow-pop);cursor:pointer;display:grid;place-items:center}
   .fab .uic{width:26px;height:26px}
   .mb-main>.wrap{padding-bottom:96px}}
-/* ---- Data menu ---- */
-.dmenu{position:fixed;z-index:70;width:300px;max-width:calc(100vw - 16px);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-pop);padding:6px}
-.dmenu button{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;padding:6px 10px;border:0;border-radius:var(--r-sm);background:none;color:var(--ink);text-align:left;cursor:pointer;font-size:13.5px}
-.dmenu button:hover,.dmenu button:focus-visible{background:var(--surface-2)}
-.dmenu button .uic{width:18px;height:18px;color:var(--ink-2)}
-.dmenu button small{display:block;color:var(--muted);font-size:12px}
-.dmenu button.pri{color:var(--accent);font-weight:650}
-.dmenu button.pri .uic{color:var(--accent)}
-.dmenu button.danger{color:var(--crit-ink)}
-.dmenu button.danger .uic{color:var(--crit-ink)}
-.dmenu hr{border:0;border-top:1px solid var(--border);margin:6px 0}
-.dmenu kbd{margin-left:auto;font:500 11px var(--font);color:var(--muted);border:1px solid var(--border);border-radius:3px;padding:1px 5px}
-.dmenu .dfoot{padding:8px 10px 6px;font-size:12px;color:var(--ink-2);line-height:1.5}
-.dmenu .dfoot .link{font-size:12px}
-@media(pointer:coarse),(max-width:700px){.dmenu button{min-height:46px}}
-/* ---- first run ---- */
-.welcome{text-align:left}
-.welcome .wart{position:relative;height:96px;margin:-18px -16px 12px;overflow:hidden;border-radius:var(--r-lg) var(--r-lg) 0 0;background:linear-gradient(105deg,color-mix(in srgb,var(--accent) 4%,var(--surface)),color-mix(in srgb,var(--accent) 12%,var(--surface)))}
-.welcome .wart .cu-art{max-width:100%}
-.welcome .themepick{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-@media print{.fab,.toast,.dmenu{display:none!important}}
+/* ---- Data menu: .mb-dm (mb-suite-topbar.css) styles the items; the app only places it under the Data button.
+   Phones: the shared CSS turns it into a bottom sheet (its !important rules beat the inline top/left set by openDataMenu). */
+#dataMenu{position:fixed}
+/* ---- welcome (.mbw from mb-suite-topbar.css): two-up fields on the targets step ---- */
+.mbw-two{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.mbw-two .mbw-field{min-width:0}
+.mbw-choices.two{grid-template-columns:1fr 1fr}
+.mbw-hint{margin-top:12px!important;font-size:12.5px;color:var(--muted)}
+@media print{.fab,.toast,.mb-dm,.mbw{display:none!important}}
 </style>
-<link rel="stylesheet" href="mb-suite-topbar.css?v=1.8">
+<link rel="stylesheet" href="mb-suite-topbar.css?v=1.9">
 
 <!-- release tags added by mb-release 2026-10-14 -->
 <link rel="canonical" href="https://nutrition.mcbflow.com/">
@@ -396,11 +397,11 @@ button.wcol{border:0;background:none;padding:0;font:inherit;color:inherit;border
 </head>
 <body class="mb-shell">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <symbol id="i-today" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></symbol>
   <symbol id="i-library" viewBox="0 0 24 24"><path d="M5 4h4v16H5zM11 4h4v16h-4zM17 5l3 1-4 14-3-1z"/></symbol>
   <symbol id="i-week" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16v-5M12 16V7M17 16v-8"/></symbol>
-  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></symbol>
-  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.7"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M19.00 10.32 L21.51 10.72 L21.51 13.28 L19.00 13.68 L18.14 15.76 L19.63 17.82 L17.82 19.63 L15.76 18.14 L13.68 19.00 L13.28 21.51 L10.72 21.51 L10.32 19.00 L8.24 18.14 L6.18 19.63 L4.37 17.82 L5.86 15.76 L5.00 13.68 L2.49 13.28 L2.49 10.72 L5.00 10.32 L5.86 8.24 L4.37 6.18 L6.18 4.37 L8.24 5.86 L10.32 5.00 L10.72 2.49 L13.28 2.49 L13.68 5.00 L15.76 5.86 L17.82 4.37 L19.63 6.18 L18.14 8.24Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.3 9.3a2.8 2.8 0 1 1 3.9 2.6c-.7.3-1.2 1-1.2 1.8v.6"/><path d="M12 17.3h.01"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
   <symbol id="i-data" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
@@ -422,27 +423,28 @@ button.wcol{border:0;background:none;padding:0;font:inherit;color:inherit;border
 </svg>
 
 <aside class="mb-side" aria-label="App">
-  <a class="brand" href="./" data-home aria-label="nutrition.mcbflow.com: go to Today"><span class="logo"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="mbnu-g1" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="54" y2="64"><stop offset="0" stop-color="#7bb02f"/><stop offset=".55" stop-color="#65A30D"/><stop offset="1" stop-color="#51820a"/></linearGradient><clipPath id="mbnu-c1"><rect width="64" height="64" rx="18"/></clipPath></defs><g clip-path="url(#mbnu-c1)"><rect width="64" height="64" fill="url(#mbnu-g1)"/><path d="M32 15 C37 15 39.5 19 40.5 23.5 C41.5 28 45 31 45 37 A13 13 0 0 1 19 37 C19 31 22.5 28 23.5 23.5 C24.5 19 27 15 32 15Z" fill="#fff" fill-opacity=".3" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="37" r="6.5" fill="#F6C860"/></g></svg></span><span class="bt"><b>nutrition<i class="tld">.mcbflow.com</i></b><span>Official Web App · v1.7</span></span></a>
+  <a class="brand" href="./" data-home aria-label="Nutrition (nutrition.mcbflow.com): go to Home"><span class="logo"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="mbnu-g1" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="54" y2="64"><stop offset="0" stop-color="#7bb02f"/><stop offset=".55" stop-color="#65A30D"/><stop offset="1" stop-color="#51820a"/></linearGradient><clipPath id="mbnu-c1"><rect width="64" height="64" rx="18"/></clipPath></defs><g clip-path="url(#mbnu-c1)"><rect width="64" height="64" fill="url(#mbnu-g1)"/><path d="M32 15 C37 15 39.5 19 40.5 23.5 C41.5 28 45 31 45 37 A13 13 0 0 1 19 37 C19 31 22.5 28 23.5 23.5 C24.5 19 27 15 32 15Z" fill="#fff" fill-opacity=".3" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="37" r="6.5" fill="#F6C860"/></g></svg></span><span class="bt"><b>Nutrition<i class="tld"><span class="sep" aria-hidden="true">∙</span>mcbflow.com</i></b><span>Official Web App · v1.9</span></span></a>
   <nav class="side-nav" aria-label="Sections">
-    <button type="button" data-act="tab" data-v="today"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-today"/></svg><span>Today</span></button>
-    <button type="button" data-act="tab" data-v="library"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-library"/></svg><span>Library</span></button>
-    <button type="button" data-act="tab" data-v="trends"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-week"/></svg><span>Week</span></button>
+    <button type="button" data-act="tab" data-v="today"><svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg><span>Home</span></button>
+    <button type="button" data-act="tab" data-v="library"><svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-library"/></svg><span>Library</span></button>
+    <button type="button" data-act="tab" data-v="trends"><svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-week"/></svg><span>Week</span></button>
   </nav>
-  <nav class="side-nav side-end" aria-label="More">
-    <button type="button" data-act="tab" data-v="settings"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span></button>
-    <button type="button" data-act="tab" data-v="help"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-help"/></svg><span>Help</span></button>
+  <nav class="side-nav side-end" aria-label="Settings and help">
+    <button type="button" data-act="tab" data-v="settings"><svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19.00 10.32 L21.51 10.72 L21.51 13.28 L19.00 13.68 L18.14 15.76 L19.63 17.82 L17.82 19.63 L15.76 18.14 L13.68 19.00 L13.28 21.51 L10.72 21.51 L10.32 19.00 L8.24 18.14 L6.18 19.63 L4.37 17.82 L5.86 15.76 L5.00 13.68 L2.49 13.28 L2.49 10.72 L5.00 10.32 L5.86 8.24 L4.37 6.18 L6.18 4.37 L8.24 5.86 L10.32 5.00 L10.72 2.49 L13.28 2.49 L13.68 5.00 L15.76 5.86 L17.82 4.37 L19.63 6.18 L18.14 8.24Z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
+    <button type="button" data-act="tab" data-v="help"><svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.3 9.3a2.8 2.8 0 1 1 3.9 2.6c-.7.3-1.2 1-1.2 1.8v.6"/><path d="M12 17.3h.01"/></svg><span>Help</span></button>
   </nav>
 </aside>
 
 <div class="mb-main">
   <header class="page-bar">
-    <a class="brand phone-brand" href="./" data-home aria-label="nutrition.mcbflow.com: go to Today"><span class="logo"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="mbnu-g2" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="54" y2="64"><stop offset="0" stop-color="#7bb02f"/><stop offset=".55" stop-color="#65A30D"/><stop offset="1" stop-color="#51820a"/></linearGradient><clipPath id="mbnu-c2"><rect width="64" height="64" rx="18"/></clipPath></defs><g clip-path="url(#mbnu-c2)"><rect width="64" height="64" fill="url(#mbnu-g2)"/><path d="M32 15 C37 15 39.5 19 40.5 23.5 C41.5 28 45 31 45 37 A13 13 0 0 1 19 37 C19 31 22.5 28 23.5 23.5 C24.5 19 27 15 32 15Z" fill="#fff" fill-opacity=".3" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="37" r="6.5" fill="#F6C860"/></g></svg></span><span class="bt"><b>nutrition<i class="tld">.mcbflow.com</i></b><span>Official Web App · v1.7</span></span></a>
-    <h1 class="page-title" id="pageTitle">Today</h1>
+    <a class="brand phone-brand" href="./" data-home aria-label="Nutrition (nutrition.mcbflow.com): go to Home"><span class="logo"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="mbnu-g2" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="54" y2="64"><stop offset="0" stop-color="#7bb02f"/><stop offset=".55" stop-color="#65A30D"/><stop offset="1" stop-color="#51820a"/></linearGradient><clipPath id="mbnu-c2"><rect width="64" height="64" rx="18"/></clipPath></defs><g clip-path="url(#mbnu-c2)"><rect width="64" height="64" fill="url(#mbnu-g2)"/><path d="M32 15 C37 15 39.5 19 40.5 23.5 C41.5 28 45 31 45 37 A13 13 0 0 1 19 37 C19 31 22.5 28 23.5 23.5 C24.5 19 27 15 32 15Z" fill="#fff" fill-opacity=".3" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="37" r="6.5" fill="#F6C860"/></g></svg></span><span class="bt"><b>Nutrition<i class="tld"><span class="sep" aria-hidden="true">∙</span>mcbflow.com</i></b><span>Official Web App · v1.9</span></span></a>
+    <h1 class="page-title" id="pageTitle">Home</h1>
     <div class="actions">
       <button type="button" class="tb tb-search" id="searchBtn" data-act="add" aria-label="Search foods and drinks" aria-keyshortcuts="/"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-search"/></svg><span class="tb-lbl">Search…</span><kbd>/</kbd></button>
       <button type="button" class="tb-chip" id="bkChip" data-act="saveBackup" title="Save backup now (Ctrl+S)">Never backed up</button>
-      <button type="button" class="tb" id="dataBtn" aria-label="Data: backup, import and export" aria-haspopup="true" aria-expanded="false" aria-controls="dataMenu"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-data"/></svg><span class="tb-lbl">Data</span><svg class="tb-chev" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-chev"/></svg><span class="tb-dot" id="bkDot" hidden></span></button>
-      <button type="button" class="themesw" id="themeSw" role="switch" aria-checked="false" aria-label="Dark mode" title="Dark mode"><span class="tk"><svg class="i-sun" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="3.2"/><path d="M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3 6 14M14 6l1.3-1.3"/></svg><svg class="i-moon" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" fill="currentColor"><path d="M16.5 12.2A6.6 6.6 0 0 1 7.8 3.5a6.6 6.6 0 1 0 8.7 8.7Z"/></svg><i class="th"></i></span></button>
+      <button type="button" class="tb" id="dataBtn" aria-label="Data: back up, sync, export or import" aria-haspopup="menu" aria-expanded="false" aria-controls="dataMenu"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-data"/></svg><span class="tb-lbl">Data</span><svg class="tb-chev" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-chev"/></svg><span class="tb-dot" id="bkDot" hidden></span></button>
+      <button type="button" class="themesw" id="themeSw" role="switch" aria-checked="false" aria-label="Dark mode" title="Dark mode"><span class="tk"><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg><i class="th"></i></span></button>
+      <button type="button" class="tb tb-acct" id="acctBtn"></button>
       <button type="button" class="tb tb-primary hide-phone" id="addBtn" data-act="add" aria-label="Log food or drink"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-plus"/></svg><span class="tb-lbl">Log food</span></button>
     </div>
   </header>
@@ -453,36 +455,77 @@ button.wcol{border:0;background:none;padding:0;font:inherit;color:inherit;border
 </div>
 
 <nav class="bnav" aria-label="Sections">
-  <button type="button" data-act="tab" data-v="today"><svg class="uic" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-today"/></svg><span>Today</span></button>
-  <button type="button" data-act="tab" data-v="library"><svg class="uic" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-library"/></svg><span>Library</span></button>
-  <button type="button" data-act="tab" data-v="trends"><svg class="uic" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-week"/></svg><span>Week</span></button>
-  <button type="button" data-act="tab" data-v="settings"><svg class="uic" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span></button>
-  <button type="button" data-act="tab" data-v="help"><svg class="uic" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-help"/></svg><span>Help</span></button>
+  <button type="button" data-act="tab" data-v="today"><svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg><span>Home</span></button>
+  <button type="button" data-act="tab" data-v="library"><svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-library"/></svg><span>Library</span></button>
+  <button type="button" data-act="tab" data-v="trends"><svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-week"/></svg><span>Week</span></button>
+  <button type="button" data-act="tab" data-v="settings"><svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19.00 10.32 L21.51 10.72 L21.51 13.28 L19.00 13.68 L18.14 15.76 L19.63 17.82 L17.82 19.63 L15.76 18.14 L13.68 19.00 L13.28 21.51 L10.72 21.51 L10.32 19.00 L8.24 18.14 L6.18 19.63 L4.37 17.82 L5.86 15.76 L5.00 13.68 L2.49 13.28 L2.49 10.72 L5.00 10.32 L5.86 8.24 L4.37 6.18 L6.18 4.37 L8.24 5.86 L10.32 5.00 L10.72 2.49 L13.28 2.49 L13.68 5.00 L15.76 5.86 L17.82 4.37 L19.63 6.18 L18.14 8.24Z"/><circle cx="12" cy="12" r="3"/></svg><span>Settings</span></button>
+  <button type="button" data-act="tab" data-v="help"><svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.3 9.3a2.8 2.8 0 1 1 3.9 2.6c-.7.3-1.2 1-1.2 1.8v.6"/><path d="M12 17.3h.01"/></svg><span>Help</span></button>
 </nav>
 
 <button type="button" class="fab" data-act="add" aria-label="Log food or drink" id="fab"><svg class="uic" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><use href="#i-plus"/></svg></button>
 
-<div class="dmenu" id="dataMenu" role="menu" aria-label="Data" hidden>
-  <button type="button" role="menuitem" class="pri" data-act="saveBackup"><svg class="uic" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-save"/></svg><span>Save backup now</span><kbd>Ctrl S</kbd></button>
-  <button type="button" role="menuitem" data-act="sync" id="dmSync"><svg class="uic" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-sync"/></svg><span><span id="dmSyncTitle">Sync across devices…</span><small id="dmSyncSub">Optional free account. Your data stays on this device too</small></span></button>
-  <button type="button" role="menuitem" data-act="exportJson"><svg class="uic" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-download"/></svg><span>Export All (JSON)…<small>Full backup you can restore</small></span></button>
-  <button type="button" role="menuitem" data-act="import"><svg class="uic" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-upload"/></svg><span>Import Backup (JSON)…</span></button>
-  <button type="button" role="menuitem" data-act="exportCsv"><svg class="uic" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-table"/></svg><span>Export All (CSV)…<small>Every log entry, for spreadsheets</small></span></button>
-  <hr>
-  <button type="button" role="menuitem" class="danger" data-act="wipe"><svg class="uic" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-trash"/></svg><span>Clear all data…</span></button>
-  <hr>
-  <div class="dfoot" id="dataFoot"></div>
+<div class="mb-dm" id="dataMenu" role="menu" aria-label="Data" hidden></div>
+
+<!-- WELCOME SCREEN (first run, MB Suite v3.3 .mbw): 1 Welcome · 2 Pick a look · 3 Daily targets · 4 Start logging. Wired in app.js (firstRun). -->
+<div class="mbw" id="welcome" role="dialog" aria-modal="true" aria-labelledby="mbwTitle" hidden>
+  <div class="mbw-card">
+    <header class="mbw-head">
+      <span class="mbw-step" id="mbwStep">Step 1 of 4</span>
+      <span class="mbw-head-a"><span id="mbwAcct"></span><button class="mbw-link" type="button" id="mbwSkip">Skip</button></span>
+      <div class="mbw-prog" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
+    </header>
+    <div class="mbw-body" data-step="0">
+      <div class="mbw-hero"><span class="mbw-logo"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="mbnu-g3" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="54" y2="64"><stop offset="0" stop-color="#7bb02f"/><stop offset=".55" stop-color="#65A30D"/><stop offset="1" stop-color="#51820a"/></linearGradient><clipPath id="mbnu-c3"><rect width="64" height="64" rx="18"/></clipPath></defs><g clip-path="url(#mbnu-c3)"><rect width="64" height="64" fill="url(#mbnu-g3)"/><path d="M32 15 C37 15 39.5 19 40.5 23.5 C41.5 28 45 31 45 37 A13 13 0 0 1 19 37 C19 31 22.5 28 23.5 23.5 C24.5 19 27 15 32 15Z" fill="#fff" fill-opacity=".3" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="37" r="6.5" fill="#F6C860"/></g></svg></span><div><h2 id="mbwTitle">Welcome to Nutrition</h2><p class="mbw-lead">Track what you eat and drink, in a tap.</p></div></div>
+      <ul class="mbw-feats">
+        <li><span class="mbw-ic"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-home"/></svg></span><div><b>Home</b><span>Today’s calories, protein, carbs, fat and hydration fill in as you log.</span></div></li>
+        <li><span class="mbw-ic"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-library"/></svg></span><div><b>Library</b><span>About 7,800 foods, plus your own foods, drinks, recipes and supplements.</span></div></li>
+        <li><span class="mbw-ic"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-week"/></svg></span><div><b>Week</b><span>Seven-day charts and what the week says about your targets.</span></div></li>
+        <li><span class="mbw-ic"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-settings"/></svg></span><div><b>Settings</b><span>Targets made for you, plus optional fasting, supplements, caffeine and allergy flags.</span></div></li>
+      </ul>
+      <p class="mbw-privacy"><svg class="uic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/></svg><span>No account needed. Everything stays in this browser on this device unless you sign in to sync. Brand search sends only the words you type, and only when you tap it. <a href="privacy.html">Privacy</a></span></p>
+    </div>
+    <div class="mbw-body" data-step="1" hidden>
+      <h2>Pick a look</h2><p class="mbw-lead">You can switch anytime from the top bar or Settings.</p>
+      <div class="mbw-looks" role="group" aria-label="Theme">
+        <button type="button" class="mbw-look" data-theme-set="light" aria-pressed="true"><span class="pv l" aria-hidden="true"><b class="a"></b><b></b><b></b></span><svg class="uic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg> Light</button>
+        <button type="button" class="mbw-look" data-theme-set="dark" aria-pressed="false"><span class="pv d" aria-hidden="true"><b class="a"></b><b></b><b></b></span><svg class="uic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg> Dark</button>
+      </div>
+    </div>
+    <div class="mbw-body" data-step="2" hidden>
+      <h2>Set your daily targets</h2><p class="mbw-lead">Starting points you can change anytime in Settings.</p>
+      <div class="mbw-choices two" role="group" aria-label="Drink units">
+        <button type="button" class="mbw-choice" data-wunit="oz" aria-pressed="true"><span><b>US fl oz</b><small>Drinks in ounces</small></span></button>
+        <button type="button" class="mbw-choice" data-wunit="ml" aria-pressed="false"><span><b>Milliliters</b><small>Drinks in mL</small></span></button>
+      </div>
+      <div class="mbw-two">
+        <label class="mbw-field"><span>Calories a day</span><input type="number" inputmode="decimal" id="wKcal" min="1" step="1"></label>
+        <label class="mbw-field"><span>Protein (g)</span><input type="number" inputmode="decimal" id="wP" min="0" step="1"></label>
+      </div>
+      <label class="mbw-field"><span id="wWaterL">Hydration from drinks (oz)</span><input type="number" inputmode="decimal" id="wWater" min="0" step="1"></label>
+      <p class="ferr" id="wErr" role="alert" hidden></p>
+      <p class="mbw-hint">Want targets worked out from your age, height, weight and goal? <button class="mbw-link acc" type="button" id="wPersonal">Personalize in Settings</button></p>
+    </div>
+    <div class="mbw-body" data-step="3" hidden>
+      <h2>Log your first meal or drink</h2><p class="mbw-lead">Tap a quick-add button on Home, or search the food database and your own foods. On a computer, press / to search from anywhere.</p>
+      <div class="mbw-choices"><button type="button" class="mbw-choice" id="wSearch"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#i-search"/></svg><span><b>Search foods now</b><small>About 7,800 foods, searched on this device.</small></span></button></div>
+      <div class="mbw-alt"><span>Moving from another device?</span>
+        <button class="mbw-btn sm" type="button" id="mbwSync"><svg class="uic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 11a8 8 0 0 0-14.7-4.4L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.7 4.4L20 16"/><path d="M20 21v-5h-5"/></svg>Sign in to sync</button>
+        <button class="mbw-btn sm" type="button" id="mbwImport"><svg class="uic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>Import a backup</button></div>
+    </div>
+    <footer class="mbw-foot"><button class="mbw-btn" type="button" id="mbwBack" hidden><svg class="uic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Back</button><button class="mbw-btn pri" type="button" id="mbwNext">Next</button></footer>
+  </div>
 </div>
 
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
-<input type="file" id="importFile" accept="application/json,.json" hidden>
+<input type="file" id="importFile" accept="application/json,.json,application/zip,.zip" hidden>
 
 <template id="shareArt"><svg class="cu-art" viewBox="0 0 640 136" preserveAspectRatio="xMaxYMax slice" aria-hidden="true" focusable="false"><circle class="b" cx="600" cy="34" r="22"/><path class="s" d="M310 146 C405 92 595 92 690 146Z"/><path class="d" transform="translate(548 128) rotate(-68) scale(0.6)" d="M0 0 C 20 -34 66 -40 96 -6 C 70 28 22 34 0 0Z"/><path class="m" transform="translate(560 128) rotate(-118) scale(0.5)" d="M0 0 C 20 -34 66 -40 96 -6 C 70 28 22 34 0 0Z"/><circle class="n" cx="470" cy="104" r="30"/><path class="b" d="M472 105.7 L495.3 111.5 A24 24 0 0 1 481.8 127.6Z"/><path class="b" d="M469.5 106.6 L476.2 129.6 A24 24 0 0 1 455.4 126Z"/><path class="b" d="M467.6 104.9 L450.9 122.2 A24 24 0 0 1 443.7 102.4Z"/><path class="b" d="M468 102.3 L444.7 96.5 A24 24 0 0 1 458.2 80.4Z"/><path class="b" d="M470.5 101.4 L463.8 78.4 A24 24 0 0 1 484.6 82Z"/><path class="b" d="M472.4 103.1 L489.1 85.8 A24 24 0 0 1 496.3 105.6Z"/><circle class="s" cx="470" cy="104" r="3.6"/><circle class="m" cx="604" cy="118" r="22"/><circle class="r" cx="384" cy="50" r="6"/><path class="d" transform="translate(412 92) scale(0.6)" d="M0 -26 C7 -15 18 -5 18 6 A18 18 0 0 1 -18 6 C-18 -5 -7 -15 0 -26Z"/><path class="m" transform="translate(380 116) scale(0.4)" d="M0 -26 C7 -15 18 -5 18 6 A18 18 0 0 1 -18 6 C-18 -5 -7 -15 0 -26Z"/><path class="n" transform="translate(528 58) scale(0.5)" d="M0 -26 C7 -15 18 -5 18 6 A18 18 0 0 1 -18 6 C-18 -5 -7 -15 0 -26Z"/><path class="d" transform="translate(498 34) scale(0.3)" d="M0 -26 C7 -15 18 -5 18 6 A18 18 0 0 1 -18 6 C-18 -5 -7 -15 0 -26Z"/></svg></template>
 
-<script src="mb-title.js?v=1.8"></script>
-<script src="mb-install.js?v=1.8"></script>
-<script src="mb-share.js?v=1.8"></script>
-<script src="mb-sync.js?v=1.8"></script>
-<script src="app.js?v=1.8"></script>
+<script src="mb-title.js?v=1.9"></script>
+<script src="mb-install.js?v=1.9"></script>
+<script src="mb-share.js?v=1.9"></script>
+<script src="mb-sync.js?v=1.9"></script>
+<script src="mb-files.js?v=1.9"></script>
+<script src="app.js?v=1.9"></script>
 </body>
 </html>

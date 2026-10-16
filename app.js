@@ -1,6 +1,6 @@
 "use strict";
 const KEY='nutrition', ML_OZ=29.5735;
-const APP={domain:'nutrition.mcbflow.com',oldDomain:'mbnutrition.online',short:'Nutrition',version:'1.8',released:'2026-10-15',firstYear:2026};
+const APP={domain:'nutrition.mcbflow.com',short:'Nutrition',version:'1.9',released:'2026-10-16',firstYear:2026};
 const THEME_KEY='nutrition.theme', SEEN_KEY='nutrition.seen', HANDLE_DB='nutrition.backup';
 const $=s=>document.querySelector(s);
 const uid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID()}catch(e){}return Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-5)};
@@ -55,7 +55,7 @@ function defaultFoods(){const F=(id,name,serving,kcal,p,c,f)=>({id,type:'food',n
   F('f_broccoli','Broccoli, raw','1 cup (91 g)',31,2.5,6,0.4),
   F('f_cheddar','Cheddar cheese','1 oz (28 g)',113,6.4,1,9.3)]}
 function defaults(){return{v:2,
-  settings:{kcal:2000,p:140,c:200,f:65,waterMl:r0(64*ML_OZ),unit:'oz',caffeine:true,alcohol:true,cafLimit:400,lastBackup:0,weightKg:null,sex:'m',fasting:false,fastGoal:16,winStart:'',winEnd:'',allergens:[],avoidWords:'',hideAllergens:false,diet:[],style:'',supps:true,offSearch:true},
+  settings:{kcal:2000,p:140,c:200,f:65,waterMl:r0(64*ML_OZ),unit:'oz',caffeine:true,alcohol:true,cafLimit:400,lastBackup:0,weightKg:null,sex:'m',fasting:false,fastGoal:16,winStart:'',winEnd:'',allergens:[],avoidWords:'',hideAllergens:false,diet:[],style:'',supps:true,offSearch:true,drinkMin:20},
   foods:defaultFoods(),drinks:defaultDrinks(),log:{},template:null,supps:[],suppLog:{}}}
 function migrate(d){
   if((d.v||1)<2){const nd=defaultDrinks(),byId=Object.fromEntries(nd.map(x=>[x.id,x]));
@@ -83,10 +83,10 @@ function normItem(x,kind){if(!isObj(x))return null;const o={...x,id:okId(x.id),n
   return o}
 function normEntry(e){if(!isObj(e))return null;const kind=pick(e.kind,['food','drink'],null);if(!kind)return null;
   const o={id:okId(e.id),kind,ref:e.ref&&ID_RE.test(e.ref)?e.ref:null,name:str(e.name,200)||'Quick add',unit:str(e.unit,80),qty:nn(e.qty)||1,kcal:nn(e.kcal),p:nn(e.p),c:nn(e.c),f:nn(e.f),caf:nn(e.caf),t:num(e.t)||Date.now()};
-  if(kind==='drink'){o.ml=nn(e.ml);o.hyd=e.hyd==null?100:Math.min(200,nn(e.hyd));o.alc=nn(e.alc)}return o}
+  if(kind==='drink'){o.ml=nn(e.ml);o.hyd=e.hyd==null?100:Math.min(200,nn(e.hyd));o.alc=nn(e.alc);if(nn(e.dMin)>0)o.dMin=Math.min(600,Math.round(nn(e.dMin)))}return o}   // dMin: minutes the drink took (t = when it was started); only set on alcoholic drinks logged from 1.9
 function normalize(d){const b=defaults(),s={...b.settings,...(isObj(d.settings)?d.settings:{})};
   ['kcal','p','c','f','waterMl','cafLimit','lastBackup'].forEach(k=>s[k]=nn(s[k]));
-  s.fastGoal=Math.max(1,Math.min(23.75,num(s.fastGoal)||16));s.unit=pick(s.unit,['oz','ml'],'oz');s.sex=pick(s.sex,['m','f','a'],'m');
+  s.fastGoal=Math.max(1,Math.min(23.75,num(s.fastGoal)||16));s.drinkMin=Math.max(1,Math.min(240,Math.round(num(s.drinkMin))||20));s.unit=pick(s.unit,['oz','ml'],'oz');s.sex=pick(s.sex,['m','f','a'],'m');
   s.weightKg=s.weightKg==null||s.weightKg===''?null:(nn(s.weightKg)||null);
   ['caffeine','alcohol','fasting','hideAllergens','supps','fastCustom','recDismissed','offSearch'].forEach(k=>{if(k in s)s[k]=!!s[k]});
   s.winStart=HM_RE.test(s.winStart)?s.winStart:'';s.winEnd=HM_RE.test(s.winEnd)?s.winEnd:'';
@@ -156,7 +156,32 @@ function addEntries(list,msg){const key=cur,day=S.log[key]||(S.log[key]=[]);
   save();render();if(list.some(e=>e.kind==='drink'))pulseGlass();
   const ids=new Set(list.map(e=>e.id));
   toast(msg,()=>{S.log[key]=(S.log[key]||[]).filter(e=>!ids.has(e.id));save();render();toast('Undone')})}
-function logItem(id){const it=findItem(id);if(!it)return;const kind=S.drinks.includes(it)?'drink':'food',w=allergenInfo(it);addEntries([mkEntry(it,kind)],'Logged '+it.name+(flagged(w)?' · ⚠ '+warnText(w):''))}
+function logItem(id){const it=findItem(id);if(!it)return;const kind=S.drinks.includes(it)?'drink':'food',w=allergenInfo(it),msg='Logged '+it.name+(flagged(w)?' · ⚠ '+warnText(w):'');
+  if(kind==='drink'&&isAlc(it)&&alcOn())return alcSheet(it,()=>mkEntry(it,'drink'),msg);
+  addEntries([mkEntry(it,kind)],msg)}
+/* ---------- alcohol timing (1.9): when a drink was started or finished and how long it took, for the BAC estimate only ---------- */
+const isShot=d=>!!d&&(d.id==='d_shot'||/\bshots?\b/i.test(d.name||'')||(num(d.ml)>0&&num(d.ml)<=60&&num(d.abv)>=20));
+const drinkMinFor=d=>isShot(d)?1:(S.settings.drinkMin||20);
+const hhmm=t=>{const d=new Date(t);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+function alcWhenHTML(defMin){return`<fieldset class="libsave alcwhen"><legend>When?</legend>
+  <div class="tagchks" role="radiogroup" aria-label="When"><label><input type="radio" name="awWhen" value="start" checked> Just started</label><label><input type="radio" name="awWhen" value="end"> Just finished</label><label><input type="radio" name="awWhen" value="earlier"> Earlier…</label></div>
+  <div class="row"><div id="awAt" hidden><label class="f" for="awT">Started at</label><input type="time" id="awT" name="awT" value="${hhmm(Date.now()-30*6e4)}"></div>
+    <div><label class="f" for="awMin">Takes about (min)</label><input type="number" inputmode="numeric" id="awMin" name="awMin" min="1" max="600" step="1" value="${defMin}"></div></div>
+  <p class="ferr" id="awErr" role="alert" hidden></p></fieldset>`}
+function alcWhenWire(sh){const at=sh.querySelector('#awAt');sh.querySelectorAll('[name=awWhen]').forEach(r=>r.onchange=()=>{at.hidden=sh.querySelector('[name=awWhen]:checked').value!=='earlier'})}
+/* → {start (ms), dMin} or null after showing what to fix */
+function alcWhenRead(sh){const w=(sh.querySelector('[name=awWhen]:checked')||{}).value||'start',mi=sh.querySelector('#awMin'),er=sh.querySelector('#awErr'),now=Date.now();
+  const fail=(m,el)=>{er.textContent=m;er.hidden=false;el.setAttribute('aria-invalid','true');el.focus();return null};er.hidden=true;
+  const m=Math.round(num(mi.value));if(!(m>=1&&m<=600))return fail('Enter how many minutes it takes, from 1 to 600.',mi);
+  if(w==='start')return{start:now,dMin:m};if(w==='end')return{start:now-m*6e4,dMin:m};
+  const ti=sh.querySelector('#awT'),[hh,mm]=String(ti.value).split(':').map(Number);if(!(hh>=0&&mm>=0))return fail('Pick the time you started.',ti);
+  const [y,mo,d]=cur.split('-').map(Number),start=new Date(y,mo-1,d,hh,mm).getTime();if(start>now+6e4)return fail('Pick a time before now.',ti);
+  return{start,dMin:m}}
+function alcSheet(it,make,msg){const sd=it.abv!=null?stdDrinks(it.ml,it.abv):num(it.alc);
+  modal(`<form id="alf"><h3>Log ${esc(it.name)}</h3><p class="help num">${fmtVol(num(it.ml))}${num(it.abv)?' · '+r1(it.abv)+'% alcohol':''} · ${r1(sd)} standard drink${r1(sd)===1?'':'s'}</p>
+    ${alcWhenHTML(drinkMinFor(it))}<p class="help">Only used for the BAC estimate. Tap the entry later to change it.</p>
+    <div class="actions"><span class="sp"></span><button type="button" class="btn" data-x>Cancel</button><button class="btn primary" data-focus>Log it</button></div></form>`,sh=>{
+    alcWhenWire(sh);sh.querySelector('#alf').onsubmit=e=>{e.preventDefault();const w=alcWhenRead(sh);if(!w)return;const en=make();en.t=w.start;en.dMin=w.dMin;closeModal();addEntries([en],msg)}})}
 function removeEntry(id){const key=cur,list=S.log[key]||[],i=list.findIndex(e=>e.id===id);if(i<0)return;const [e]=list.splice(i,1);save();render();
   toast('Removed '+e.name,()=>{(S.log[key]||(S.log[key]=[])).splice(i,0,e);save();render()})}
 function stepEntry(id,d){const e=(S.log[cur]||[]).find(x=>x.id===id);if(!e)return;const n=r2(e.qty+d);if(n<=0)return removeEntry(id);e.qty=n;save();render();if(e.kind==='drink'&&d>0)pulseGlass()}
@@ -178,13 +203,17 @@ function applyAnims(){requestAnimationFrame(()=>requestAnimationFrame(()=>{docum
 /* ---------- BAC (Widmark) ---------- */
 const WIDMARK_R={m:0.68,f:0.55,a:0.615}, BETA=0.015 /* %BAC eliminated per hour */, ABSORB_MIN=45;
 function alcEvents(){const now=Date.now(),from=now-24*36e5,ev=[],oldest=shift(todayKey(),-2);
-  Object.keys(S.log).forEach(k=>{if(k<oldest)return;S.log[k].forEach(e=>{if(e.kind==='drink'&&e.alc>0&&e.t>=from&&e.t<=now+6e4)ev.push({t:e.t,g:e.alc*STD_G*e.qty})})});
+  Object.keys(S.log).forEach(k=>{if(k<oldest)return;S.log[k].forEach(e=>{if(e.kind==='drink'&&e.alc>0&&e.t>=from&&e.t<=now+6e4)ev.push({t:e.t,g:e.alc*STD_G*e.qty,d:num(e.dMin)})})});
   return ev.sort((a,b)=>a.t-b.t)}
 function bacCurve(){const s=S.settings;if(!alcOn()||!s.weightKg)return null;const ev=alcEvents();if(!ev.length)return null;
   const k=100/(s.weightKg*1000*(WIDMARK_R[s.sex]||WIDMARK_R.m)),elim=BETA/60,now=Date.now(),t0=ev[0].t,pts=[];
   let bac=0,t=t0,nowBac=0,peak={v:0,t:t0},zeroAt=null;
   for(let i=0;i<60*72;i++){let add=0,absorbing=false;
-    for(const e of ev){if(t>=e.t&&t<e.t+ABSORB_MIN*6e4){add+=e.g*k/ABSORB_MIN;absorbing=true}else if(t<e.t)absorbing=true}
+    for(const e of ev){if(!e.d){if(t>=e.t&&t<e.t+ABSORB_MIN*6e4){add+=e.g*k/ABSORB_MIN;absorbing=true}else if(t<e.t)absorbing=true;continue}
+      /* timed drink (1.9): the alcohol goes down evenly over [t, t+d]; each sip then absorbs over ABSORB_MIN like a whole drink did.
+         Absorption this minute = share of the drink sipped in the last ABSORB_MIN minutes ÷ ABSORB_MIN. Same total, later and lower peak. */
+      const end=e.t+e.d*6e4,ov=Math.max(0,Math.min(end,t)-Math.max(e.t,t-ABSORB_MIN*6e4))/6e4;
+      if(ov>0)add+=e.g*k*ov/(e.d*ABSORB_MIN);if(t<end+ABSORB_MIN*6e4)absorbing=true}
     bac=Math.max(0,bac+add-elim);
     if(t<=now)nowBac=bac;if(bac>peak.v)peak={v:bac,t};if(i%5===0)pts.push([t,bac]);
     if(bac<=0&&!absorbing&&t>t0){zeroAt=t;pts.push([t,0]);break}
@@ -241,7 +270,7 @@ const chartTip=(()=>{let el=null,on=null,touchFirst=false;
     let left=r.left+r.width/2-tw/2;left=Math.max(8,Math.min(innerWidth-tw-8,left));let top=r.top-th-8;if(top<8)top=r.bottom+8;
     tip.style.left=left+'px';tip.style.top=top+'px';document.querySelectorAll('.tipon').forEach(x=>x.classList.remove('tipon'));t.classList.add('tipon')};
   const hide=()=>{on=null;if(el)el.hidden=true;document.querySelectorAll('.tipon').forEach(x=>x.classList.remove('tipon'))};
-  document.addEventListener('pointerover',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');if(t&&t!==on)show(t);else if(!t&&on&&e.pointerType!=='touch')hide()});
+  document.addEventListener('pointerover',e=>{if(e.pointerType==='touch')return;/* touch: pointerover fires just before pointerdown, which handles the first-tap label */const t=e.target.closest&&e.target.closest('[data-tip]');if(t&&t!==on)show(t);else if(!t&&on&&e.pointerType!=='touch')hide()});
   document.addEventListener('pointerdown',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');touchFirst=!!t&&e.pointerType!=='mouse'&&t!==on;if(t)show(t);else hide()});
   document.addEventListener('focusin',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');if(t)show(t);else if(on)hide()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&on)hide()});
@@ -422,6 +451,7 @@ function offForm(x){const unitsF=[...(x.sq||x.k100==null?[['srv','servings']]:[]
       <div><label class="f" for="oc">Carbs g</label><input type="number" inputmode="decimal" id="oc" data-ed="c" min="0" step="any"></div>
       <div><label class="f" for="of">Fat g</label><input type="number" inputmode="decimal" id="of" data-ed="f" min="0" step="any"></div></div>
       <p class="help" id="edNote">For the amount above. Change the amount and these scale with it.</p></details>
+    ${x.drink&&x.abv>0&&alcOn()?alcWhenHTML(drinkMinFor({name:x.name,ml:x.su==='ml'?x.sq:0,abv:x.abv})):''}
     <label class="check"><input type="checkbox" name="keep" checked> <span id="keepLbl">Save to my ${x.drink?'drinks':'foods'} so it's instant next time</span></label>
     <div class="actions"><span class="sp"></span><button type="button" class="btn" data-x>Cancel</button><button class="btn primary">Log it</button></div></form>`,sh=>{
     const amt=sh.querySelector('#amt'),au=sh.querySelector('#au'),box=sh.querySelector('#amts'),sum=sh.querySelector('#dsum');
@@ -447,14 +477,17 @@ function offForm(x){const unitsF=[...(x.sq||x.k100==null?[['srv','servings']]:[]
         /* keep the user's correction as a ratio to the label numbers so it survives a unit change */
         ed={kcal:rb.kcal?nb.kcal*o.kcal/rb.kcal:o.kcal,p:rb.p?nb.p*o.p/rb.p:o.p,c:rb.c?nb.c*o.c/rb.c:o.c,f:rb.f?nb.f*o.f/rb.f:o.f};edBase=amtNow()}else start();chips();calc()};
     box.onclick=e=>{const v=e.target.dataset.amt;if(v){amt.value=v;calc()}};
+    if(sh.querySelector('#awMin'))alcWhenWire(sh);
     sh.querySelector('#offf').onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target),o=valsE(),nm=(nameIn.value.trim()||x.name).slice(0,120);if(!(num(amt.value)>0))return;
+      const aw=sh.querySelector('#awMin')?alcWhenRead(sh):null;if(sh.querySelector('#awMin')&&!aw)return;
       const label=au.value==='srv'?`${r1(num(amt.value))} serving${num(amt.value)===1?'':'s'}`+(x.serving?` (${x.serving})`:''):`${r1(num(amt.value))} ${au.value==='floz'?'fl oz':au.value}`;
       let it,kind;
       if(x.drink){kind='drink';const ml=r0(base()||(x.sq||355));
         it={name:nm,ml,kcal:r1(o.kcal),p:r1(o.p),c:r1(o.c),f:r1(o.f),caf:r0(x.caf*ml/100),hyd:x.abv>5?0:100,abv:alcOn()?r1(x.abv):0,src:'est'};it.alc=stdDrinks(it.ml,it.abv)}
       else{kind='food';it={name:nm,serving:label.slice(0,80),kcal:r1(o.kcal),p:r1(o.p),c:r1(o.c),f:r1(o.f)}}
       if(fd.get('keep')){it.id=uid();it.fav=true;it.uses=0;if(kind==='food'){it.type='food';S.foods.push(it)}else S.drinks.push(it)}
-      closeModal();addEntries([mkEntry(it,kind)],'Logged '+nm+(fd.get('keep')?' and saved it':''))}})}
+      const en=mkEntry(it,kind);if(aw&&en.alc>0){en.t=aw.start;en.dMin=aw.dMin}
+      closeModal();addEntries([en],'Logged '+nm+(fd.get('keep')?' and saved it':''))}})}
 
 /* ---------- allergies & intolerances ----------
    Matching is by food NAME only (the database has no ingredient lists), so it flags "may contain".
@@ -660,13 +693,13 @@ const SOURCES=[
   ['Brand foods','Open Food Facts, a free, open database of packaged foods added by volunteers. Data under the Open Database License (ODbL).','https://world.openfoodfacts.org','Used only when you tap Search brands online. Numbers come from product labels as entered by volunteers, so check them against the package.'],
   ['Standard drinks','NIAAA. What Is a Standard Drink?','https://www.niaaa.nih.gov/alcohols-effects-health/what-standard-drink','One U.S. standard drink is 14 g of pure alcohol: 12 oz beer at 5%, 5 oz wine at 12%, or 1.5 oz of 80-proof spirits.'],
   ['Allergens','U.S. FDA. Food Allergies: What You Need to Know (the 9 major allergens).','https://www.fda.gov/food/buy-store-serve-safe-food/food-allergies-what-you-need-know','Milk, eggs, fish, crustacean shellfish, tree nuts, peanuts, wheat, soybeans and sesame. Gluten and lactose are included here as common intolerances. Warnings are name matches, not ingredient checks.'],
-  ['BAC estimate','Widmark formula; elimination rate from the Wisconsin Department of Justice Alcohol Monograph.','https://www.wisdoj.gov/Forensic%20Science/Alcohol%20Monograph-37306-1.pdf','BAC = alcohol ÷ (body weight × 0.68 for men or 0.55 for women), minus about 0.015% per hour (typical range 0.010–0.025). Each drink is assumed to absorb over 45 minutes.']];
+  ['BAC estimate','Widmark formula; elimination rate from the Wisconsin Department of Justice Alcohol Monograph.','https://www.wisdoj.gov/Forensic%20Science/Alcohol%20Monograph-37306-1.pdf','BAC = alcohol ÷ (body weight × 0.68 for men or 0.55 for women), minus about 0.015% per hour (typical range 0.010–0.025). Each drink is assumed to absorb over 45 minutes; when you say how long a drink took, its alcohol is spread over that time first.']];
 const EXT='<svg class="ext" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-ext"/></svg><span class="vh"> (opens in a new tab)</span>';
 function sourcesHTML(){return`<section class="card span2" id="sources"><h2><span>Sources & methods</span></h2><ul class="srcs">${SOURCES.filter(([k])=>alcOn()||!/drinks|BAC/.test(k)).map(([k,t,u,d])=>`<li><small>${esc(k)}</small><a href="${u}" target="_blank" rel="noopener noreferrer">${esc(t)}${EXT}</a><br>${esc(d)}</li>`).join('')}</ul>
   <p class="empty">Every number in this app is an estimate. Labels, portions, cooking and your own body all shift the real values.</p></section>`}
 const FAQ=[
-  ['Where is my log saved?','In this browser on this device, and nowhere else. There is no account and nothing is uploaded. Clearing your browser data deletes it, so use Data → Save backup now every so often.'],
-  ['How do I move my log to another phone or computer?','On the old device, open Data and choose Export All (JSON). Copy that file to the new device, then use Data → Import Backup (JSON) there. Merge keeps what is already on the new device and skips anything already in it.'],
+  ['Where is my log saved?','In this browser on this device. No account is needed. If you choose to sign in to sync (free), a copy also goes to your mcbflow.com account so your other devices match. Clearing your browser data deletes the copy in this browser, so use Data → Save backup now every so often.'],
+  ['How do I move my log to another phone or computer?','Sign in to sync on both devices (Data → Sync across devices…). Or, on the old device, choose Data → Export All (JSON) or Export All (ZIP), copy that file to the new device, then use Data → Import Backup there. Merge keeps what is already on the new device and skips anything already in it.'],
   ['Can I install it like an app?','In Chrome or Edge, use Install in Settings (or the install icon in the address bar). On iPhone, tap Share, then Add to Home Screen.'],
   ['Does it work offline?','Yes, after your first visit. The app and its food database are kept by the browser, so logging and searching work without a connection.'],
   ['Where do the food numbers come from?','About 7,200 foods come from the USDA FoodData Central SR Legacy database and about 560 from the TempoLife dataset. Values are per 100 g; you pick the amount. Details are under Sources & methods below.'],
@@ -685,7 +718,7 @@ function sorted(arr){return[...arr].sort((a,b)=>(b.fav?1:0)-(a.fav?1:0)||us(b)-u
 const ICON=(n,sz=18)=>`<svg class="uic" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const ART=()=>{const t=document.getElementById('shareArt');return t?t.innerHTML:''};
 function dayNav(){return`<div class="daynav" role="group" aria-label="Choose day"><button type="button" data-act="prev" aria-label="Previous day">${ICON('left')}</button><button type="button" class="lbl" data-act="today" aria-label="Go to today">${esc(prettyDate(cur))}</button><button type="button" data-act="next" aria-label="Next day">${ICON('right')}</button></div>`}
-function bannerHTML(title,sub){return`<section class="cu-banner">${ART()}<div class="cu-txt"><h2 class="cu-t">${esc(title)}</h2><p class="cu-s num">${String(sub).split(' · ').map((x,i,a)=>`<span class="nw">${esc(x)}${i<a.length-1?' ·':''}</span>`).join(' ')}</p>${dayNav()}</div></section>`}
+function bannerHTML(title,sub){return`<section class="cu-banner">${ART()}<div class="cu-txt"><p class="mb-greet" id="greet"></p><h2 class="cu-t">${esc(title)}</h2><p class="cu-s num">${String(sub).split(' · ').map((x,i,a)=>`<span class="nw">${esc(x)}${i<a.length-1?' ·':''}</span>`).join(' ')}</p>${dayNav()}</div></section>`}
 function todayHTML(){
   const s=S.settings,t=totals(cur),rem=s.kcal-t.kcal,over=rem<0,C=2*Math.PI*56;
   const ring=anim('ring',r1(C*(1-Math.min(1,t.kcal/(s.kcal||1)))));
@@ -776,7 +809,7 @@ function libraryHTML(){
   const P=l=>`<button type="button" class="btn" data-act="${l[0]}">${ICON('plus',16)}${l[1]}</button>`;
   if(libTab==='supps'){const L=S.supps||[];return`<section class="card" id="libpanel" role="tabpanel" aria-labelledby="lt-supps"><div class="libhead">${segs}<div class="toolbar">${P(['newSupp','New supplement'])}</div></div>
     ${L.length?L.map(x=>`<div class="libitem"><button type="button" class="info-b" data-act="editSupp" data-id="${x.id}"><div class="name">${esc(x.name)}${x.active===false?'<span class="tag">paused</span>':''}</div><div class="meta">${esc(x.dose||'No dose entered')} · ${x.slots.map(sl=>(SLOTS.find(z=>z[0]===sl)||['','?'])[1]).join(', ')} · ${x.days.length===7?'every day':x.days.map(d=>WEEK[d]).join(' ')}</div></button></div>`).join('')
-      :'<p class="empty">No supplements yet. Add the vitamins and supplements you take, with the times and days, and Today shows a checklist for them.</p>'}</section>`}
+      :'<p class="empty">No supplements yet. Add the vitamins and supplements you take, with the times and days, and Home shows a checklist for them.</p>'}</section>`}
   const isF=libTab==='foods',arr=sorted(isF?S.foods:visDrinks());
   return `<section class="card" id="libpanel" role="tabpanel" aria-labelledby="lt-${libTab}">
     <div class="libhead">${segs}
@@ -785,7 +818,7 @@ function libraryHTML(){
       <button type="button" class="info-b" data-act="${isF?'editFood':'editDrink'}" data-id="${it.id}"><div class="name">${esc(it.name)}${it.recipe?'<span class="tag">recipe</span>':''}</div>
       <div class="meta num">${isF?esc(it.serving)+' · ':''}${itemMeta(it,isF?'food':'drink')}${isF?' · '+r0(it.c)+'g C · '+r0(it.f)+'g F':(it.hyd!==100?' · counts '+it.hyd+'%':'')}${it.uses?' · used '+it.uses+'×':''}</div></button>
       <button type="button" class="btn sm" data-act="log" data-id="${it.id}" aria-label="Log ${esc(it.name)}">Log</button></div>`).join('')
-    :`<p class="empty">No ${isF?'foods':'drinks'} saved yet. Saved items get one-tap buttons on Today.</p>`}
+    :`<p class="empty">No ${isF?'foods':'drinks'} saved yet. Saved items get one-tap buttons on Home.</p>`}
     <p class="note">★ pins an item to the front of quick add. Unpinned items sort by how often you log them.</p>
   </section>`}
 
@@ -830,18 +863,27 @@ function trendsHTML(){
   </div>`}
 
 const fmtDay=key=>{const [y,m,d]=key.split('-').map(Number);return new Date(y,m-1,d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})};
+/* Settings (MB Suite v3.3 .mb-set): Appearance → Account & sync → Nutrition settings → Personalized targets → Tracking →
+   Diet & allergies → Backup & data → Install → About. Every control keeps its data-set key, so the one change handler below still saves it. */
 function settingsHTML(){const s=S.settings;
   const n=(id,label,val,step='1')=>`<div><label class="f" for="${id}">${label}</label><input type="number" inputmode="decimal" id="${id}" data-set="${id}" value="${val}" step="${step}" min="0"></div>`;
   const pr=prof(),hIn=pr.heightCm?pr.heightCm/2.54:0,rc=recommend(),paces=PACES[unitSys()][pr.goal]||[];
   const btCard=(k,b)=>`<button type="button" class="btype ${pr.bodyType===k?'on':''}" data-act="btype" data-k="${k}" aria-pressed="${pr.bodyType===k}">${bodySVG(k)}<b>${b.label}</b><small>${b.blurb}</small>${mbar(b.pct)}${splitLegend(b.pct)}</button>`;
   const dark=document.documentElement.dataset.theme==='dark';
-  return `<div class="grid">
-  <section class="card span2" aria-labelledby="h-appear"><h2 id="h-appear"><span>Appearance</span></h2>
-    <div class="radios" role="radiogroup" aria-label="Theme" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-      <label class="radio"><input type="radio" name="theme" value="light" data-theme-pick ${dark?'':'checked'}><span><b>Light</b><small>The default</small></span></label>
-      <label class="radio"><input type="radio" name="theme" value="dark" data-theme-pick ${dark?'checked':''}><span><b>Dark</b><small>Remembered in this browser</small></span></label></div>
-  </section>
-  <section class="card span2" id="aboutyou"><h2><span>About you</span></h2>
+  const sec=(id,title,body)=>`<section class="mb-set-sec" aria-labelledby="${id}"${id==='setP'?' id="aboutyou"':''}><h2 class="mb-set-h" id="${id}">${title}</h2>${body}</section>`;
+  const row=(label,desc,ctl,forId)=>`<div class="mb-set-row"><div class="mb-set-l">${forId?`<label for="${forId}"><b>${label}</b></label>`:`<b>${label}</b>`}${desc?`<small>${desc}</small>`:''}</div><div class="mb-set-c">${ctl}</div></div>`;
+  const numRow=(id,label,desc,val,step='1')=>row(label,desc,`<input type="number" inputmode="decimal" id="${id}" data-set="${id}" value="${val}" step="${step}" min="0">`,id);
+  const tog=(k,label,desc,on)=>`<label class="mb-set-row"><span class="mb-set-l"><b>${label}</b>${desc?`<small>${desc}</small>`:''}</span><span class="mb-set-c"><input type="checkbox" data-set="${k}" ${on?'checked':''}></span></label>`;
+  const SUNI=DMI('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),MOONI=DMI('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/>');
+  const yr=APP.firstYear>=new Date().getFullYear()?APP.firstYear:APP.firstYear+'–'+new Date().getFullYear();
+  return `<div class="mb-set">
+  ${sec('setA','Appearance',`<div class="mb-set-card">${row('Theme','Light or dark. Saved on this device.',`<div class="mb-seg" role="group" aria-label="Theme"><button type="button" data-theme-set="light" aria-pressed="${!dark}">${SUNI}Light</button><button type="button" data-theme-set="dark" aria-pressed="${dark}">${MOONI}Dark</button></div>`)}</div>`)}
+  ${sec('setS','Account &amp; sync',window.MBSync?`<div class="mb-set-card pad" id="syncCard"></div>`:`<div class="mb-set-card pad"><p class="empty" style="margin:0">Sync isn't available in this browser. Everything still saves on this device.</p></div>`)}
+  ${sec('setT','Nutrition settings',`<div class="mb-set-card">
+    ${numRow('kcal','Calories','Daily calorie target.',s.kcal)}${numRow('p','Protein (g)','Daily protein target in grams.',s.p)}${numRow('c','Carbs (g)','Daily carb target in grams.',s.c)}${numRow('f','Fat (g)','Daily fat target in grams.',s.f)}
+    ${numRow('waterMl','Hydration ('+uName()+')','From drinks. Needs vary with activity, heat, diet and health; 64 oz is only a starting point.',r0(toUnit(s.waterMl)))}
+    ${row('Drink units','Used for drink sizes and your hydration target.',`<select id="unit" data-set="unit"><option value="oz" ${isOz()?'selected':''}>US fl oz</option><option value="ml" ${!isOz()?'selected':''}>mL</option></select>`,'unit')}</div>`)}
+  ${sec('setP','Personalized targets',`<div class="mb-set-card pad">
     <div class="row">
       <div><label class="f" for="sex">Sex</label><select id="sex" data-set="sex"><option value="m" ${s.sex==='m'?'selected':''}>Male</option><option value="f" ${s.sex==='f'?'selected':''}>Female</option><option value="a" ${s.sex==='a'?'selected':''}>Prefer not to say (average)</option></select></div>
       ${n('age','Age',pr.age||'')}${n('weight','Weight ('+(isOz()?'lb':'kg')+')',s.weightKg?r1(isOz()?s.weightKg/LB_KG:s.weightKg):'','0.1')}
@@ -860,56 +902,64 @@ function settingsHTML(){const s=S.settings;
     ${pr.bodyType==='custom'?`<div class="row">${n('pct:p','Protein %',pr.pct.p)}${n('pct:c','Carbs %',pr.pct.c)}${n('pct:f','Fat %',pr.pct.f)}</div><p class="empty">Adds up to ${r1(pr.pct.p+pr.pct.c+pr.pct.f)}%.</p>`:''}
     <div class="dayacts"><button class="btn sm" data-act="quiz">Not sure? Take the 4-question quiz</button></div>
     <p class="empty">Body types are coaching shorthand, not a medical measurement. Total calories and enough protein matter most, so treat these splits as starting points.</p>
-    <div class="recbox num">${!rc?'Enter your age, height and weight to see your calorie and macro targets. Nothing leaves this device.':rc.issue?esc(rc.issue):`<b>${fmt(rc.kcal)} cal</b> · ${rc.grams.p} g P · ${rc.grams.c} g C · ${rc.grams.f} g F · ${fmtVol(rc.waterMl)} drinks${rc.warnings.length?` <span class="warn">· ${rc.warnings.length} note${rc.warnings.length>1?'s':''}</span>`:''}`}
-      <div class="dayacts"><button class="btn primary" data-act="rec">Review &amp; use these targets</button></div></div>
-  </section>
-  <section class="card"><h2><span>Daily targets</span></h2>
-    <div class="row">${n('kcal','Calories',s.kcal)}${n('p','Protein g',s.p)}${n('c','Carbs g',s.c)}${n('f','Fat g',s.f)}</div>
-    <div class="row">${n('waterMl','Hydration ('+uName()+')',r0(toUnit(s.waterMl)))}<div><label class="f" for="unit">Drink units</label><select id="unit" data-set="unit"><option value="oz" ${isOz()?'selected':''}>US fl oz</option><option value="ml" ${!isOz()?'selected':''}>mL</option></select></div></div>
-    <p class="empty">Fluid needs vary with activity, heat, diet and health. Pick a number that suits you; 64 oz is only a starting point.</p>
-  </section>
-  <section class="card"><h2><span>Extras</span></h2>
-    <label class="toggle">Track fasting<input type="checkbox" data-set="fasting" ${s.fasting?'checked':''}></label>
-    ${s.fasting?`<div class="row"><div><label class="f" for="fastGoal">Fast goal</label><select id="fastGoal" data-set="fastGoal">${(()=>{const pre=!s.fastCustom&&FAST_PRESETS.includes(+s.fastGoal);return FAST_PRESETS.map(h=>`<option value="${h}" ${pre&&+s.fastGoal===h?'selected':''}>${h} hours (${h}:${24-h})</option>`).join('')+`<option value="custom" ${pre?'':'selected'}>Custom${pre?'':` (${fh(s.fastGoal)}:${fh(24-s.fastGoal)})`}</option>`})()}</select></div>
+    <div class="recbox num">${!rc?'Enter your age, height and weight to see your calorie and macro targets. Nothing leaves this device unless you sign in to sync.':rc.issue?esc(rc.issue):`<b>${fmt(rc.kcal)} cal</b> · ${rc.grams.p} g P · ${rc.grams.c} g C · ${rc.grams.f} g F · ${fmtVol(rc.waterMl)} drinks${rc.warnings.length?` <span class="warn">· ${rc.warnings.length} note${rc.warnings.length>1?'s':''}</span>`:''}`}
+      <div class="dayacts"><button class="btn primary" data-act="rec">Review &amp; use these targets</button></div></div></div>`)}
+  ${sec('setX','Tracking',`<div class="mb-set-card">
+    ${tog('fasting','Track fasting','A timer from your last bite, with an optional eating window.',s.fasting)}
+    ${s.fasting?`<div class="mb-set-sub"><div class="row"><div><label class="f" for="fastGoal">Fast goal</label><select id="fastGoal" data-set="fastGoal">${(()=>{const pre=!s.fastCustom&&FAST_PRESETS.includes(+s.fastGoal);return FAST_PRESETS.map(h=>`<option value="${h}" ${pre&&+s.fastGoal===h?'selected':''}>${h} hours (${h}:${24-h})</option>`).join('')+`<option value="custom" ${pre?'':'selected'}>Custom${pre?'':` (${fh(s.fastGoal)}:${fh(24-s.fastGoal)})`}</option>`})()}</select></div>
       <div><label class="f" for="winStart">Eating window from</label><input type="time" id="winStart" data-set="winStart" value="${s.winStart}"></div><div><label class="f" for="winEnd">to</label><input type="time" id="winEnd" data-set="winEnd" value="${s.winEnd}"></div></div>
     ${s.fastCustom||!FAST_PRESETS.includes(+s.fastGoal)?`<div class="row">${n('fastHours','Custom fast (hours)',fh(s.fastGoal),'0.25')}</div>`:''}
     <p class="empty">Set the start and the end fills in from your fast goal. Change the end and the fast goal adjusts to match.</p>
-    <p class="empty">The window is optional. Fasting isn't a good fit during pregnancy, with diabetes medication, or with a history of disordered eating; check with your doctor first.</p>`:''}
-    <label class="toggle">Track supplements<input type="checkbox" data-set="supps" ${s.supps?'checked':''}></label>
-    <label class="toggle">Track caffeine<input type="checkbox" data-set="caffeine" ${s.caffeine?'checked':''}></label>
-    ${s.caffeine?`<div class="row" style="margin-bottom:6px">${n('cafLimit','Caffeine guide mg',s.cafLimit)}</div>`:''}
-    <label class="toggle">Search brands online<input type="checkbox" data-set="offSearch" ${s.offSearch?'checked':''}></label>
-    ${s.offSearch?`<p class="empty">Adds a "Search brands online" button when you log food. Only when you tap it, the words you typed go to Open Food Facts, a free volunteer database of packaged foods. Nothing else from your log is sent.</p>`:''}
-    ${under21()?'':`<label class="toggle">Track alcohol<input type="checkbox" data-set="alcohol" ${s.alcohol?'checked':''}></label>`}
-    ${alcOn()?`<p class="empty">The BAC estimate uses your weight and sex from About you and appears on Today only while it's above 0.000%. Turning alcohol off hides beer, wine and spirits everywhere.</p>`:''}
-  </section>
-  <section class="card span2"><h2><span>Dietary preferences</span></h2>
-    <label class="f">Foods to flag</label><div class="tagchks">${Object.entries(DIETS).map(([k,[l]])=>`<label><input type="checkbox" data-set="diet:${k}" ${(s.diet||[]).includes(k)?'checked':''}> ${l}</label>`).join('')}</div>
+    <p class="empty">The window is optional. Fasting isn't a good fit during pregnancy, with diabetes medication, or with a history of disordered eating; check with your doctor first.</p></div>`:''}
+    ${tog('supps','Track supplements','A checklist on Home for the vitamins and supplements you take.',s.supps)}
+    ${tog('caffeine','Track caffeine','Shows caffeine from drinks against a daily guide.',s.caffeine)}
+    ${s.caffeine?numRow('cafLimit','Caffeine guide (mg)','400 mg is the FDA figure for most adults.',s.cafLimit):''}
+    ${tog('offSearch','Search brands online',s.offSearch?'Adds a "Search brands online" button when you log food. Only when you tap it, the words you typed go to Open Food Facts, a free volunteer database of packaged foods. Nothing else from your log is sent.':'Off: food search uses only the database on this device and your own foods.',s.offSearch)}
+    ${under21()?'':tog('alcohol','Track alcohol',alcOn()?'The BAC estimate uses your weight and sex from Personalized targets and appears on Home only while it\'s above 0.000%. Turning alcohol off hides beer, wine and spirits everywhere.':'Off: beer, wine and spirits are hidden everywhere.',s.alcohol)}
+    ${alcOn()?numRow('drinkMin','Average time to finish a drink (min)','Used for the BAC estimate when you log a drink. Shots count as 1 minute.',s.drinkMin):''}</div>`)}
+  ${sec('setDiet','Diet &amp; allergies',`<div class="mb-set-card pad">
+    <label class="f" style="margin-top:0">Foods to flag</label><div class="tagchks">${Object.entries(DIETS).map(([k,[l]])=>`<label><input type="checkbox" data-set="diet:${k}" ${(s.diet||[]).includes(k)?'checked':''}> ${l}</label>`).join('')}</div>
     <label class="f" for="style">Eating style (sets your macro split)</label><select id="style" data-set="style">${Object.entries(STYLES).map(([k,[l]])=>`<option value="${k}" ${(s.style||'')===k?'selected':''}>${l}</option>`).join('')}</select>
-    ${s.style?`<p class="empty">${esc(STYLES[s.style][1])} Split: ${STYLE_SPLITS[s.style].p}% protein, ${STYLE_SPLITS[s.style].c}% carbs, ${STYLE_SPLITS[s.style].f}% fat. Open About you and tap Review to update your targets.</p>`:'<p class="empty">With no eating style, your body type sets the split.</p>'}
+    ${s.style?`<p class="empty">${esc(STYLES[s.style][1])} Split: ${STYLE_SPLITS[s.style].p}% protein, ${STYLE_SPLITS[s.style].c}% carbs, ${STYLE_SPLITS[s.style].f}% fat. Open Personalized targets and tap Review to update your targets.</p>`:'<p class="empty">With no eating style, your body type sets the split.</p>'}
     <p class="empty">Vegetarian, vegan and similar flags use the same name matching as allergy warnings, so check labels for hidden ingredients like gelatin, whey or fish sauce.</p>
-  </section>
-  <section class="card span2"><h2><span>Allergies & intolerances</span></h2>
-    <div class="tagchks">${Object.entries(ALLERGENS).map(([k,[l]])=>`<label><input type="checkbox" data-set="alg:${k}" ${(s.allergens||[]).includes(k)?'checked':''}> ${l}</label>`).join('')}</div>
+    <label class="f">Allergies &amp; intolerances</label><div class="tagchks">${Object.entries(ALLERGENS).map(([k,[l]])=>`<label><input type="checkbox" data-set="alg:${k}" ${(s.allergens||[]).includes(k)?'checked':''}> ${l}</label>`).join('')}</div>
     <label class="f" for="avoidWords">Other words to flag (comma separated)</label><input type="text" id="avoidWords" data-set="avoidWords" value="${esc(s.avoidWords||'')}" placeholder="mushroom, cilantro">
-    <label class="toggle">Hide foods that conflict with my allergies or diet<input type="checkbox" data-set="hideAllergens" ${s.hideAllergens?'checked':''}></label>
-    <div class="warnbox"><b>How warnings work.</b> The food database has names and nutrition only, no ingredient lists. Warnings come from words in a food's name (shown as "may contain") and from allergens you tick on your own foods (shown as "contains"). A food with no warning is not confirmed safe. Always read the label, and ask at restaurants.</div>
-  </section>
-  <section class="span2 endcards" aria-label="Install and about">
-    <div data-mb-install data-app-name="Nutrition" data-note="Opens in its own window with its own icon. Works offline after the first visit."></div>
-    <div class="mb-about" role="group" aria-label="About this app">${ICON('info',22)}<div><b>nutrition.mcbflow.com™</b><p>Version ${APP.version} · ${fmtDay(APP.released)}</p>
-      <p class="mb-about-links"><button type="button" data-act="tab" data-v="help">Help &amp; sources</button><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="https://mcbflow.com/">More free apps at mcbflow.com</a></p>
-      <p class="mb-about-copy">© ${APP.firstYear===new Date().getFullYear()?APP.firstYear:APP.firstYear+'–'+new Date().getFullYear()} Matthew Broyer. All rights reserved.</p></div></div>
-  </section></div>`}
+    <label class="check"><input type="checkbox" data-set="hideAllergens" ${s.hideAllergens?'checked':''}> Hide foods that conflict with my allergies or diet</label>
+    <div class="warnbox"><b>How warnings work.</b> The food database has names and nutrition only, no ingredient lists. Warnings come from words in a food's name (shown as "may contain") and from allergens you tick on your own foods (shown as "contains"). A food with no warning is not confirmed safe. Always read the label, and ask at restaurants.</div></div>`)}
+  ${sec('setD','Backup &amp; data',`<div class="mb-set-card" style="padding:8px 16px">${dmHTML(false)}</div>`)}
+  ${sec('setI','Install',`<div data-mb-install data-app-name="Nutrition" data-note="Opens in its own window with its own icon. Works offline after the first visit."></div>
+    <div class="mb-set-card pad mb-inst-fb"><p>${window.MBInstall&&MBInstall.isInstalled()?'Nutrition is installed on this device. It works offline after the first visit.':'Already installed, or this browser doesn’t offer it here. In Chrome or Edge, use the install icon in the address bar. On iPhone or iPad, tap Share, then Add to Home Screen.'}</p></div>`)}
+  ${sec('setAb','About',`<div class="mb-about" role="group" aria-label="About this app">${ICON('info',22)}<div><b>nutrition.mcbflow.com™</b><p>Version ${APP.version} · ${fmtDay(APP.released)}</p>
+      <p class="mb-about-links"><button type="button" data-act="whatsNew">What’s new</button><button type="button" data-act="tab" data-v="help">Help &amp; sources</button><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="https://mcbflow.com/">More free apps at mcbflow.com</a></p>
+      <p class="mb-about-copy">© ${yr} Matthew Broyer. All rights reserved.</p></div></div>`)}
+  </div>`}
+/* one footer for every view except Settings (its About card says the same) */
+function footHTML(){const yr=APP.firstYear>=new Date().getFullYear()?APP.firstYear:APP.firstYear+'–'+new Date().getFullYear();
+  return`<footer class="mb-foot"><p class="mb-foot-main"><b>${APP.short}</b> v${APP.version} · Free · No account needed</p>
+  <nav class="mb-foot-links" aria-label="About ${APP.short}"><button type="button" data-act="whatsNew">What’s new</button><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="https://mcbflow.com/">More free apps</a></nav>
+  <p class="mb-foot-copy">© ${yr} Matthew Broyer</p><p class="mb-foot-note">Not medical or nutrition advice. Every number is an estimate.</p></footer>`}
+/* What's new: this release in plain words; the full history is RELEASE_NOTES.md */
+const WHATS_NEW=['A new Settings page with everything in one place: Appearance, Account & sync, your targets, tracking, diet & allergies, Backup & data, Install and About.',
+  'An account button in the top bar, and "Keep me signed in on this device" (turn it off on a shared computer).',
+  'A clearer welcome screen: pick a look, set your daily targets, then start logging.',
+  'A clearer Data menu with a short description on every item, and a new Export All (ZIP): your backup plus spreadsheets of your log, foods, drinks and supplements in one file. Import Backup reads the ZIP too.',
+  'Fewer backup reminders while you\'re signed in and syncing.',
+  'Alcohol: when you log a drink, say whether you just started or finished it (or when) and how long it takes, for a steadier BAC estimate.',
+  'Your profile picture and screen name from your mcbflow.com account, and a short greeting on Home.',
+  'The first tab is now called Home, and Settings has a gear icon.',
+  'An even top bar and the new name style "Nutrition ∙ mcbflow.com".'];
+function whatsNew(){modal(`<h3>What’s new in ${APP.short} ${APP.version}</h3><p class="help">${fmtDay(APP.released)}</p><ul class="wn">${WHATS_NEW.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+  <div class="actions"><a class="link" href="RELEASE_NOTES.md" target="_blank" rel="noopener">All release notes${EXT}</a><span class="sp"></span><button type="button" class="btn primary" data-x data-focus>Done</button></div>`)}
 
-const VIEWS={today:'Today',library:'Library',trends:'Week',settings:'Settings',help:'Help'};
+const VIEWS={today:'Home',library:'Library',trends:'Week',settings:'Settings',help:'Help'};   // the start view is "Home" in the nav (v1.9); its banner still says Today
 function render(){
   if(!VIEWS[view])view='today';
   document.querySelectorAll('[data-act="tab"][data-v]').forEach(b=>{if(b.closest('.side-nav,.bnav')){if(b.dataset.v===view)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')}});
   $('#pageTitle').textContent=VIEWS[view];MBTitle.set(VIEWS[view]);
   const noAdd=view==='settings'||view==='help';$('#fab').hidden=noAdd;$('#addBtn').hidden=noAdd;
-  $('#main').innerHTML=view==='today'?todayHTML():view==='library'?libraryHTML():view==='trends'?trendsHTML():view==='help'?helpHTML():settingsHTML();
-  if(view==='settings'&&window.MBInstall)MBInstall.render();
+  $('#main').innerHTML=view==='today'?todayHTML()+footHTML():view==='library'?libraryHTML()+footHTML():view==='trends'?trendsHTML()+footHTML():view==='help'?helpHTML()+footHTML():settingsHTML();
+  if(view==='settings'){if(window.MBInstall)MBInstall.render();const sc=$('#syncCard');if(sc&&SYNC)SYNC.card(sc)}
+  {const g=$('#greet');if(g){if(SYNC)SYNC.greet(g,{name:''});else g.hidden=true}}   // "Good morning(, name)" from mb-sync; Nutrition stores no name of its own
   updateBackupStatus();applyAnims()}
 
 /* ---------- dialogs: focus moves in, Tab stays inside, Esc/backdrop close (asking first if a form has unsaved edits), focus returns to the opener ---------- */
@@ -1102,7 +1152,8 @@ function entryForm(id){const e=(S.log[cur]||[]).find(x=>x.id===id);if(!e)return;
     <div class="row"><div><label class="f" for="eq">Servings</label><input type="number" inputmode="decimal" id="eq" name="qty" value="${e.qty}" min="0.25" step="0.25" required></div>
     ${dr?`<div><label class="f" for="eml">Size each (${uName()})</label><input type="number" inputmode="decimal" id="eml" name="ml" value="${r1(toUnit(e.ml))}" min="0" step="any"></div>`:''}
     <div><label class="f" for="ek">Cal each</label><input type="number" inputmode="decimal" id="ek" name="kcal" value="${e.kcal}" min="0" step="any"></div></div>
-    <div class="row"><div><label class="f" for="et">Time</label><input type="time" id="et" name="time" value="${new Date(e.t).toTimeString().slice(0,5)}"></div></div>
+    <div class="row"><div><label class="f" for="et">${dr&&e.alc>0?'Started at':'Time'}</label><input type="time" id="et" name="time" value="${new Date(e.t).toTimeString().slice(0,5)}"></div>
+    ${dr&&e.alc>0&&alcOn()?`<div><label class="f" for="edm">Took about (min)</label><input type="number" inputmode="numeric" id="edm" name="dMin" value="${e.dMin||''}" min="1" max="600" step="1" placeholder="—"></div>`:''}</div>
     <div class="row"><div><label class="f" for="ep">Protein g</label><input type="number" inputmode="decimal" id="ep" name="p" value="${e.p}" min="0" step="any"></div>
     <div><label class="f" for="ec">Carbs g</label><input type="number" inputmode="decimal" id="ec" name="c" value="${e.c}" min="0" step="any"></div>
     <div><label class="f" for="efat">Fat g</label><input type="number" inputmode="decimal" id="efat" name="fat" value="${e.f}" min="0" step="any"></div></div>
@@ -1116,6 +1167,7 @@ function entryForm(id){const e=(S.log[cur]||[]).find(x=>x.id===id);if(!e)return;
     sh.querySelector('#ef').onsubmit=ev=>{ev.preventDefault();const fd=new FormData(ev.target);
       Object.assign(e,{name:fv(fd,'name').trim(),qty:num(fv(fd,'qty'))||1,kcal:num(fv(fd,'kcal')),p:num(fv(fd,'p')),c:num(fv(fd,'c')),f:num(fv(fd,'fat'))});
       if(dr)Object.assign(e,{ml:r1(fromUnit(fv(fd,'ml'))),caf:num(fv(fd,'caf')),hyd:num(fv(fd,'hyd'))});
+      if(dr&&fd.has('dMin')){const dm=Math.round(num(fv(fd,'dMin')));if(dm>=1)e.dMin=Math.min(600,dm);else delete e.dMin}
       let saved='';const mode=fd.get('libMode');
       if(mode==='update'){const lib=findItem(e.ref);if(lib){Object.assign(lib,{name:e.name,kcal:e.kcal,p:e.p,c:e.c,f:e.f});if(dr)Object.assign(lib,{ml:e.ml,caf:e.caf,hyd:e.hyd});else if(e.unit)lib.serving=e.unit;saved=' and updated '+lib.name}}
       if(mode==='new'){const it={id:uid(),name:e.name,kcal:e.kcal,p:e.p,c:e.c,f:e.f,fav:true,uses:1,last:Date.now()};
@@ -1138,11 +1190,12 @@ const backupText=()=>JSON.stringify({app:APP.domain,format:1,appVersion:APP.vers
 async function writeHandle(h,text){if(h.queryPermission&&(await h.queryPermission({mode:'readwrite'}))!=='granted'){if(!h.requestPermission||(await h.requestPermission({mode:'readwrite'}))!=='granted')return false}
   const w=await h.createWritable();await w.write(text);await w.close();return true}
 function markBackedUp(msg){S.settings.lastBackup=Date.now();save();updateBackupStatus();if(view==='settings')render();toast(msg)}
-async function pickAndSave(name,text,mime,ext,remember){
-  if(!fsOK()){if(download(name.replace('.'+ext,'-'+todayKey()+'.'+ext),text,mime))return'download';return false}
+/* dated: the name already carries today's date (ZIP), so a plain download keeps it as is */
+async function pickAndSave(name,text,mime,ext,remember,dated){const dl=()=>dated?name:name.replace('.'+ext,'-'+todayKey()+'.'+ext);
+  if(!fsOK()){if(download(dl(),text,mime))return'download';return false}
   try{const h=await window.showSaveFilePicker({suggestedName:name,startIn:(await hGet('json'))||'documents',types:[{description:ext.toUpperCase()+' file',accept:{[mime]:['.'+ext]}}]});
     await writeHandle(h,text);if(remember){await hSet(remember,h);if(remember==='json')jsonHandleName=h.name}return'file'}
-  catch(e){if(e&&e.name==='AbortError')return false;if(download(name.replace('.'+ext,'-'+todayKey()+'.'+ext),text,mime))return'download';return false}}
+  catch(e){if(e&&e.name==='AbortError')return false;if(download(dl(),text,mime))return'download';return false}}
 async function saveBackupNow(){closeDataMenu();
   const h=fsOK()?await hGet('json'):null;
   if(h){try{if(await writeHandle(h,backupText())){markBackedUp('Backup saved to '+h.name);return true}}catch(e){toast("Couldn't write to "+h.name+'. Pick where to save it.')}}
@@ -1150,24 +1203,54 @@ async function saveBackupNow(){closeDataMenu();
   if(r){markBackedUp(r==='file'?'Backup saved to '+jsonHandleName:'Backup downloaded to your Downloads folder');return true}return false}
 async function exportJson(){closeDataMenu();const r=await pickAndSave('nutrition-backup.json',backupText(),'application/json','json','json');
   if(r)markBackedUp(r==='file'?'Backup saved to '+jsonHandleName:'Backup downloaded to your Downloads folder')}
-async function exportCsv(){closeDataMenu();
-  const q=v=>{let s=String(v??'');if(/^[=+\-@\t\r]/.test(s))s="'"+s;return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
-  const rows=[['date','time','type','name','servings','unit','calories','protein_g','carbs_g','fat_g','volume_ml','hydration_ml','caffeine_mg','alcohol_drinks']];
+/* the log as a spreadsheet (one row per entry); the CSV is for reading, not for importing back */
+function logCsv(){const q=v=>{let s=String(v??'');if(/^[=+\-@\t\r]/.test(s))s="'"+s;return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+  const rows=[['date','time','type','name','servings','unit','calories','protein_g','carbs_g','fat_g','volume_ml','hydration_ml','caffeine_mg','alcohol_drinks','drink_minutes']];
   Object.keys(S.log).sort().forEach(d=>[...S.log[d]].sort((a,b)=>a.t-b.t).forEach(e=>{const x=e.qty,dr=e.kind==='drink';
-    rows.push([d,new Date(e.t).toTimeString().slice(0,5),e.kind,e.name,x,dr?'':e.unit,r1(e.kcal*x),r1(e.p*x),r1(e.c*x),r1(e.f*x),dr?r0(e.ml*x):'',dr?r0(e.ml*e.hyd/100*x):'',r0((e.caf||0)*x),dr?r1((e.alc||0)*x):''])}));
-  const r=await pickAndSave('nutrition-log.csv','﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n'),'text/csv','csv',null);
+    rows.push([d,new Date(e.t).toTimeString().slice(0,5),e.kind,e.name,x,dr?'':e.unit,r1(e.kcal*x),r1(e.p*x),r1(e.c*x),r1(e.f*x),dr?r0(e.ml*x):'',dr?r0(e.ml*e.hyd/100*x):'',r0((e.caf||0)*x),dr?r1((e.alc||0)*x):'',dr&&e.dMin?e.dMin:''])}));
+  return'﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n')}
+async function exportCsv(){closeDataMenu();
+  const r=await pickAndSave('nutrition-log.csv',logCsv(),'text/csv','csv',null);
   if(r)toast(r==='file'?'CSV saved':'CSV downloaded to your Downloads folder')}
+/* Export All (ZIP): the full JSON backup + one spreadsheet per record type + a README, in one file.
+   Import Backup reads the nutrition-backup.json inside it. */
+async function exportZip(){closeDataMenu();if(!window.MBFiles){toast("This browser couldn't build the .zip. Use Export All (JSON) instead.");return}
+  const tags=x=>(x.allergens||[]).map(k=>(ALL_GROUPS[k]||[k])[0]).join('; ');
+  const foods=MBFiles.csv(S.foods,[{key:'name',label:'name'},{label:'type',get:x=>x.recipe?'recipe':'food'},{key:'serving',label:'serving'},{key:'kcal',label:'calories'},{key:'p',label:'protein_g'},{key:'c',label:'carbs_g'},{key:'f',label:'fat_g'},
+    {label:'recipe_portions',get:x=>x.recipe?x.recipe.portions:''},{label:'contains',get:tags},{label:'pinned',get:x=>x.fav?'yes':''},{label:'times_logged',get:x=>x.uses||0}]);
+  const drinks=MBFiles.csv(S.drinks,[{key:'name',label:'name'},{key:'ml',label:'volume_ml'},{key:'kcal',label:'calories'},{key:'p',label:'protein_g'},{key:'c',label:'carbs_g'},{key:'f',label:'fat_g'},{key:'caf',label:'caffeine_mg'},
+    {key:'hyd',label:'hydration_pct'},{label:'alcohol_abv_pct',get:x=>num(x.abv)||''},{label:'contains',get:tags},{label:'pinned',get:x=>x.fav?'yes':''},{label:'times_logged',get:x=>x.uses||0}]);
+  const supps=MBFiles.csv(S.supps||[],[{key:'name',label:'name'},{key:'dose',label:'dose'},{label:'when',get:x=>(x.slots||[]).map(sl=>(SLOTS.find(z=>z[0]===sl)||['',sl])[1]).join('; ')},
+    {label:'days',get:x=>(x.days||[]).length===7?'every day':(x.days||[]).map(d=>WEEK[d]).join(' ')},{key:'notes',label:'notes'},{label:'active',get:x=>x.active===false?'no':'yes'}]);
+  const readme=['Nutrition (nutrition.mcbflow.com) · export of '+fmtDay(todayKey()),'',
+    'nutrition-backup.json      Complete backup of everything. Restore it with Data > Import Backup (you can pick this .zip or the .json).',
+    'nutrition-log.csv          Every log entry: date, time, food or drink, servings, calories, macros, volume, hydration, caffeine, alcohol, and how long an alcoholic drink took.',
+    'nutrition-foods.csv        Your saved foods and meal prep recipes (numbers per serving).',
+    'nutrition-drinks.csv       Your saved drinks (numbers per drink).',
+    'nutrition-supplements.csv  Your supplements and when you take them.','',
+    'The .csv files open in Excel, Numbers or Google Sheets. They are copies for reading; only the .json restores into the app.',''].join('\r\n');
+  let blob;try{blob=await MBFiles.zip([{name:'nutrition-backup.json',data:backupText()},{name:'nutrition-log.csv',data:logCsv()},{name:'nutrition-foods.csv',data:foods},
+    {name:'nutrition-drinks.csv',data:drinks},{name:'nutrition-supplements.csv',data:supps},{name:'README.txt',data:readme}])}catch(e){toast("Couldn't build the .zip. Try Export All (JSON) instead.");return}
+  const r=await pickAndSave('nutrition-backup-'+todayKey()+'.zip',blob,'application/zip','zip',null,true);
+  if(r)markBackedUp(r==='file'?'ZIP saved':'ZIP downloaded to your Downloads folder')}
 async function startImport(){closeDataMenu();
-  if('showOpenFilePicker' in window&&fsOK()){try{const [h]=await window.showOpenFilePicker({startIn:(await hGet('json'))||'documents',types:[{description:'Backup file',accept:{'application/json':['.json']}}]});readImport(await h.getFile());return}catch(e){if(e&&e.name==='AbortError')return}}
+  if('showOpenFilePicker' in window&&fsOK()){try{const [h]=await window.showOpenFilePicker({startIn:(await hGet('json'))||'documents',types:[{description:'Backup file (JSON or ZIP)',accept:{'application/json':['.json'],'application/zip':['.zip']}}]});readImport(await h.getFile());return}catch(e){if(e&&e.name==='AbortError')return}}
   $('#importFile').click()}
 $('#importFile').onchange=e=>{const file=e.target.files[0];e.target.value='';if(file)readImport(file)};
+const isZip=f=>/\.zip$/i.test(f.name||'')||/zip/.test(f.type||'');
 function readImport(file){if(file.size>25e6){toast("That file is too large to be a Nutrition backup.");return}
+  if(isZip(file)){if(!window.MBFiles){toast("This browser can't open .zip files here. Import the .json backup instead.");return}
+    /* a ZIP from Export All (ZIP): use its nutrition-backup.json (or its only .json file) */
+    MBFiles.unzip(file).then(list=>{const js=list.filter(e=>/\.json$/i.test(e.name)&&!/(^|\/)\./.test(e.name)),pick=js.find(e=>/-backup\.json$/i.test(e.name))||(js.length===1?js[0]:null);
+      if(!pick){toast("That .zip has no Nutrition backup inside, so nothing was imported.");return}return pick.text().then(importText)})
+      .catch(()=>toast("Couldn't open that .zip file. Try exporting it again, or import the .json backup."));return}
   const rd=new FileReader();rd.onerror=()=>toast("Couldn't read that file. Try saving it again, then import.");
-  rd.onload=()=>{let d;try{d=JSON.parse(rd.result)}catch(err){toast("That file isn't valid JSON, so nothing was imported.");return}
-    if(!isObj(d)||(d.app&&d.app!==APP.domain&&d.app!==APP.oldDomain)){toast(d&&d.app?`That backup is from ${String(d.app).slice(0,40)}, not nutrition.mcbflow.com. Nothing was imported.`:"That file isn't a Nutrition backup. Nothing was imported.");return}
+  rd.onload=()=>importText(rd.result);rd.readAsText(file)}
+function importText(text){let d;try{d=JSON.parse(text)}catch(err){toast("That file isn't valid JSON, so nothing was imported.");return}
+    if(!isObj(d)||(d.app&&d.app!==APP.domain&&d.app!=='mbnutrition.online')){toast(d&&d.app?`That backup is from ${String(d.app).slice(0,40)}, not nutrition.mcbflow.com. Nothing was imported.`:"That file isn't a Nutrition backup. Nothing was imported.");return}   // legacy-import: backups saved before the move still carry the old address
     if(!Array.isArray(d.foods)||!Array.isArray(d.drinks)||!isObj(d.log)){toast("That file isn't a Nutrition backup. Nothing was imported.");return}
     let inc;try{const raw={...d};['app','format','appVersion','exportedAt'].forEach(k=>delete raw[k]);inc=normalize(migrate(raw))}catch(err){toast("That backup is damaged, so nothing was imported.");return}
-    importSheet(inc,d)};rd.readAsText(file)}
+    importSheet(inc,d)}
 function mergeCounts(inc){let add=0,dup=0;const have=new Set();Object.values(S.log).forEach(L=>L.forEach(e=>have.add(e.id)));
   Object.values(inc.log).forEach(L=>L.forEach(e=>have.has(e.id)?dup++:add++));
   const ids=new Set([...S.foods,...S.drinks,...(S.supps||[])].map(x=>x.id));let items=0;[...inc.foods,...inc.drinks,...inc.supps].forEach(x=>{if(!ids.has(x.id))items++});return{add,dup,items}}
@@ -1197,34 +1280,93 @@ function clearAll(){closeDataMenu();const days=Object.keys(S.log).length;
     [KEY,'nutrition.ui'].forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});
     await hClear();jsonHandleName='';S=defaults();save();cur=todayKey();view='today';render();toast('All data cleared')},
     {danger:true,backup:true,detail:`This deletes your log (${days} day${days===1?'':'s'}), saved foods, drinks, recipes, supplements, targets and settings, and forgets the saved backup location. Backup files you saved stay where they are.${SYNC&&SYNC.status().signedIn?' You’re signed in to sync, so this also clears your synced data on your account and other devices. To clear only this browser, sign out first (Data → Sync).':''}`})}
-/* backup status: the chip (desktop), the dot on Data (smaller screens) and the Data menu footer */
+/* ---------- Data list (MB Suite v3.3 .mb-dm): the same items, words and order in the Data menu and in Settings → Backup & data ---------- */
+const DMI=d=>`<svg class="uic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`;
+const DM_IC={saveBackup:DMI('<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-7h8v7"/>'),sync:DMI('<path d="M20 11a8 8 0 0 0-14.7-4.4L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.7 4.4L20 16"/><path d="M20 21v-5h-5"/>'),
+  exportJson:DMI('<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M10 12c-1 0-1 .5-1 1.5S8.5 15 8 15c.5 0 1 .5 1 1.5s0 1.5 1 1.5M14 12c1 0 1 .5 1 1.5s.5 1.5 1 1.5c-.5 0-1 .5-1 1.5s0 1.5-1 1.5"/>'),
+  exportCsv:DMI('<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M3 15h18M9 4v16"/>'),exportZip:DMI('<path d="M4 7h16v13H4z"/><path d="M3 4h18v3H3zM10 11h4"/>'),
+  import:DMI('<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>'),wipe:DMI('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>')};
+function dmHTML(menu){const r=menu?' role="menuitem"':'',pr=menu?' role="presentation"':'';
+  const it=(act,title,desc,cls,extra)=>`<button type="button" class="mb-dm-it${cls||''}"${r} data-act="${act}"${act==='sync'&&!window.MBSync?' hidden':''}>${DM_IC[act]}<span class="t"><b data-dm="${act}T">${title}</b><small data-dm="${act}D">${desc}</small></span>${extra||''}</button>`;
+  return it('saveBackup','Save backup now','Updates your backup file in one click. Best for regular backups.',' is-key','<kbd>Ctrl+S</kbd>')
+    +it('sync','Sync across devices…','Free, optional account. Keeps your phone and computer the same.')
+    +`<div class="mb-dm-sec"${pr}>Export</div>`
+    +it('exportJson','Export All (JSON)…','Complete backup of everything. Best for restoring or moving to another browser.')
+    +it('exportCsv','Export All (CSV)…','Spreadsheet copy for Excel, Numbers or Google Sheets. Best for totals and reports.')
+    +it('exportZip','Export All (ZIP)…','Backup and spreadsheets together in one file. Best for archiving.')
+    +`<div class="mb-dm-sec"${pr}>Import</div>`
+    +it('import','Import Backup…','Restore from a JSON or ZIP file. You choose Merge or Replace first.')
+    +`<div class="mb-dm-status"${pr} data-dm="status"><span class="sq"></span><span data-dm="statusT">Never backed up</span></div>`
+    +`<p class="mb-dm-note" data-dm="note">Your data is stored in this browser on this device. Clearing your browser data deletes it, so keep a backup.</p><hr class="mb-dm-sep">`
+    +it('wipe','Clear all data…','Deletes everything in this browser. You can save a backup first.',' danger')}
+$('#dataMenu').innerHTML=dmHTML(true);
+/* backup status: the chip (desktop), the dot on Data (smaller screens) and the status line + note in every Data list.
+   Signed in and syncing fine (SYNC.status().quietBackups): no amber chip, no dot, status says "Synced to your account". */
 function backupAge(){const t=S.settings.lastBackup;if(!t)return null;return Math.floor((new Date().setHours(0,0,0,0)-new Date(t).setHours(0,0,0,0))/864e5)}
-function updateBackupStatus(){if(!S)return;const a=backupAge(),hasData=Object.keys(S.log).length>0,due=hasData&&(a===null||a>=7);
+const shortDay=t=>new Date(t).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+function updateBackupStatus(){if(!S)return;const a=backupAge(),hasData=Object.keys(S.log).length>0,st=SYNC?SYNC.status():null,quiet=!!(st&&st.quietBackups),due=!quiet&&hasData&&(a===null||a>=7);
   const txt=a===null?'Never backed up':a===0?'Backed up today':a===1?'Backed up yesterday':`Backed up ${a} days ago`;
-  const chip=$('#bkChip');chip.textContent=txt;chip.classList.toggle('warn',due);chip.classList.toggle('ok',!due&&a!==null);chip.setAttribute('aria-label',txt+'. Save backup now');
-  $('#bkDot').hidden=!due;$('#dataBtn').setAttribute('aria-label','Data: backup, import and export'+(due?' (backup due)':''));
-  $('#dataFoot').innerHTML=`<b>${esc(txt)}</b>${jsonHandleName&&fsOK()?` · to <b>${esc(jsonHandleName)}</b> in the folder you chose. <button type="button" class="link" data-act="changeLoc">Change location…</button>`:fsOK()?'':' · Saves go to your Downloads folder in this browser.'}<br>Your log is stored in this browser on this device. Clearing your browser data deletes it, so keep a backup.`}
+  const chip=$('#bkChip'),ctxt=quiet?'Synced':txt;chip.textContent=ctxt;chip.classList.toggle('warn',due);chip.classList.toggle('ok',!quiet&&!due&&a!==null);chip.setAttribute('aria-label',(quiet?'Synced to your account':txt)+'. Save backup now');
+  $('#bkDot').hidden=!due;$('#dataBtn').setAttribute('aria-label','Data: back up, sync, export or import'+(due?' (backup due)':''));
+  const last=a===null?null:`${shortDay(S.settings.lastBackup)} · ${a===0?'today':a===1?'yesterday':a+' days ago'}`;
+  const where=jsonHandleName&&fsOK()?` · to ${jsonHandleName}`:'';
+  const set=(k,v,html)=>document.querySelectorAll(`[data-dm="${k}"]`).forEach(el=>{if(html)el.innerHTML=v;else el.textContent=v});
+  set('statusT',quiet?`Synced to your account · last file backup ${a===null?'none yet':shortDay(S.settings.lastBackup)}`:(last?'Last backup '+last+where:'Never backed up'));
+  document.querySelectorAll('[data-dm="status"]').forEach(el=>{el.classList.toggle('ok',quiet||(!due&&a!==null));el.classList.toggle('warn',due)});
+  set('saveBackupD',!fsOK()?'Downloads a dated backup file in one click. Best for regular backups.':jsonHandleName?'Updates your backup file in one click. Best for regular backups.':'Choose where to keep your backup file. After that it’s one click.');
+  const signed=!!(st&&st.signedIn);
+  set('syncT',signed?'Sync: '+st.label:'Sync across devices…');set('syncD',signed?'Signed in as '+st.email:'Free, optional account. Keeps your phone and computer the same.');
+  set('wipeD',signed?'Deletes everything here and your synced copy.':'Deletes everything in this browser. You can save a backup first.');
+  set('note',(signed?'Synced to your mcbflow.com account. A file backup now and then is still a good idea.':'Your data is stored in this browser on this device. Clearing your browser data deletes it, so keep a backup.')
+    +(jsonHandleName&&fsOK()?' <button type="button" data-act="changeLoc">Change backup location…</button>':''),true)}
 /* Data menu */
 function openDataMenu(){const m=$('#dataMenu'),b=$('#dataBtn'),r=b.getBoundingClientRect();updateBackupStatus();m.hidden=false;
-  const w=m.offsetWidth;m.style.top=(r.bottom+6)+'px';m.style.left=Math.max(8,Math.min(window.innerWidth-w-8,r.right-w))+'px';b.setAttribute('aria-expanded','true');m.querySelector('button').focus()}
+  const w=m.offsetWidth;m.style.top=(r.bottom+6)+'px';m.style.left=Math.max(8,Math.min(window.innerWidth-w-8,r.right-w))+'px';b.setAttribute('aria-expanded','true');m.querySelector('.mb-dm-it').focus()}
 function closeDataMenu(focusBtn){const m=$('#dataMenu');if(!m||m.hidden)return;m.hidden=true;$('#dataBtn').setAttribute('aria-expanded','false');if(focusBtn)$('#dataBtn').focus()}
 
-/* ---------- first-run screen: once per browser, skippable (addendum "Onboarding") ---------- */
+/* ---------- welcome / first-run screen (MB Suite v3.3 .mbw): once per browser, skippable ----------
+   1 Welcome · 2 Pick a look · 3 Daily targets · 4 Start logging (+ Sign in to sync / Import a backup).
+   Not shown when this browser already has a log or a saved sign-in. Skip, Esc and finishing all set nutrition.seen. */
+const WEL=$('#welcome'),W_N=4;let wAt=0,wOpener=null,wUnit='oz';
+const welcomeOpen=()=>!!WEL&&!WEL.hidden;
+function markSeen(){try{localStorage.setItem(SEEN_KEY,'1')}catch(e){}}
+function wAcct(){const box=$('#mbwAcct');if(!box)return;const st=SYNC?SYNC.status():null;
+  box.innerHTML=!SYNC?'':st.signedIn?'<span class="mbw-signed">Signed in</span>':'<button class="mbw-link acc" type="button" id="mbwIn">Sign in</button>';
+  const b=$('#mbwIn');if(b)b.onclick=()=>SYNC.open();const ms=$('#mbwSync');if(ms)ms.hidden=!SYNC||st.signedIn}
+const wWaterShown=ml=>wUnit==='oz'?r0(ml/ML_OZ):r0(ml);
+function wUnitSet(u){const w=$('#wWater'),v=w.value===''?null:num(w.value),ml=v==null?null:(wUnit==='oz'?v*ML_OZ:v);wUnit=u;
+  WEL.querySelectorAll('[data-wunit]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.wunit===u)));
+  $('#wWaterL').textContent='Hydration from drinks ('+(u==='oz'?'oz':'mL')+')';if(ml!=null)w.value=wWaterShown(ml)}
+/* the targets step writes straight into the same settings as Settings → Nutrition settings */
+function wTargets(strict){const k=$('#wKcal'),p=$('#wP'),w=$('#wWater'),err=$('#wErr');[k,p,w].forEach(x=>x.removeAttribute('aria-invalid'));err.hidden=true;
+  const bad=[[k,num(k.value)>0],[p,p.value!==''&&num(p.value)>=0],[w,num(w.value)>0]].filter(x=>!x[1]).map(x=>x[0]);
+  if(bad.length){if(!strict)return true;bad.forEach(x=>x.setAttribute('aria-invalid','true'));err.textContent=bad[0]===p?'Enter a protein target in grams (0 or more).':'Enter a number above 0 for each target.';err.hidden=false;bad[0].focus();return false}
+  const s=S.settings,next={kcal:r0(num(k.value)),p:r0(num(p.value)),waterMl:r0(wUnit==='oz'?num(w.value)*ML_OZ:num(w.value)),unit:wUnit};
+  if(next.kcal!==s.kcal||next.p!==s.p||next.unit!==s.unit||Math.abs(next.waterMl-s.waterMl)>(wUnit==='oz'?ML_OZ/2:0.5)){Object.assign(s,next);save();render()}return true}
+function wStep(i){wAt=i;WEL.querySelectorAll('.mbw-body').forEach(b=>b.hidden=+b.dataset.step!==i);
+  WEL.querySelectorAll('.mbw-prog i').forEach((x,k)=>x.classList.toggle('on',k<=i));
+  $('#mbwStep').textContent='Step '+(i+1)+' of '+W_N;$('#mbwBack').hidden=i===0;
+  $('#mbwNext').innerHTML=(i===W_N-1?'Start logging':'Next')+DMI('<path d="M5 12h14M13 6l6 6-6 6"/>').replace('width="18" height="18"','width="16" height="16"');
+  wAcct();const body=WEL.querySelector(`.mbw-body[data-step="${i}"]`);if(body)body.scrollTop=0}
+function wOpen(){const s=S.settings;wOpener=document.activeElement;closeModal(true);closeDataMenu();
+  $('#wKcal').value=s.kcal;$('#wP').value=s.p;wUnit=s.unit==='ml'?'ml':'oz';$('#wWater').value=wWaterShown(s.waterMl);wUnitSet(wUnit);
+  const t=document.documentElement.dataset.theme==='dark'?'dark':'light';WEL.querySelectorAll('[data-theme-set]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themeSet===t)));
+  WEL.hidden=false;wStep(0);setTimeout(()=>{try{$('#mbwNext').focus()}catch(e){}},30)}
+/* then: optional follow-up once the screen is gone (open search, Settings, import…) */
+function wClose(then){if(!welcomeOpen())return;if(wAt===2)wTargets(false);markSeen();WEL.hidden=true;
+  if(then)then();else if(wOpener&&wOpener.isConnected&&wOpener!==document.body){try{wOpener.focus()}catch(e){}}}
+if(WEL){$('#mbwNext').onclick=()=>{if(wAt===2&&!wTargets(true))return;if(wAt<W_N-1)wStep(wAt+1);else wClose()};
+  $('#mbwBack').onclick=()=>{if(wAt===2&&!wTargets(false))return;wStep(Math.max(0,wAt-1))};
+  $('#mbwSkip').onclick=()=>wClose();
+  WEL.querySelectorAll('[data-wunit]').forEach(b=>b.onclick=()=>wUnitSet(b.dataset.wunit));
+  ['#wKcal','#wP','#wWater'].forEach(id=>$(id).addEventListener('input',e=>{e.target.removeAttribute('aria-invalid');if(!WEL.querySelector('[aria-invalid]'))$('#wErr').hidden=true}));
+  $('#wPersonal').onclick=()=>wClose(()=>{go('settings');setTimeout(()=>{const el=$('#aboutyou');if(el){el.scrollIntoView();const f=$('#age');f&&f.focus()}},60)});
+  $('#wSearch').onclick=()=>wClose(()=>{cur=todayKey();go('today');openAdd()});
+  $('#mbwSync').onclick=()=>{if(SYNC)SYNC.open()};
+  $('#mbwImport').onclick=()=>wClose(()=>startImport())}
 function firstRun(){let seen=null;try{seen=localStorage.getItem(SEEN_KEY)}catch(e){return}
-  const mark=()=>{try{localStorage.setItem(SEEN_KEY,'1')}catch(e){}};
-  if(seen)return;if(Object.keys(S.log).length){mark();return}
-  const dark=document.documentElement.dataset.theme==='dark';
-  modal(`<div class="welcome"><div class="wart">${ART()}</div><h3>Track what you eat and drink, in a tap</h3>
-    <p class="help">Log meals and drinks from a database of about 7,800 foods, watch calories, protein, carbs, fat and hydration fill in, and add fasting or supplements if you want them. No account. Your log stays in this browser.</p>
-    <label class="f">Appearance</label><div class="themepick radios" role="radiogroup" aria-label="Theme">
-      <label class="radio"><input type="radio" name="wtheme" value="light" data-theme-pick ${dark?'':'checked'}><span><b>Light</b></span></label>
-      <label class="radio"><input type="radio" name="wtheme" value="dark" data-theme-pick ${dark?'checked':''}><span><b>Dark</b></span></label></div>
-    <div class="actions"><button type="button" class="btn" id="wImp">${ICON('upload',16)}Import a backup</button>${SYNC?'<button type="button" class="btn" id="wSync">Sign in to sync</button>':''}<span class="sp"></span><button type="button" class="btn" id="wSet">Set my targets</button><button type="button" class="btn primary" id="wGo" data-focus>Start logging</button></div></div>`,sh=>{
-    sh.querySelector('#wGo').onclick=()=>{mark();closeModal()};
-    sh.querySelector('#wSet').onclick=()=>{mark();closeModal();go('settings')};
-    sh.querySelector('#wImp').onclick=()=>{mark();closeModal();startImport()};
-    const ws=sh.querySelector('#wSync');if(ws)ws.onclick=()=>{mark();closeModal();SYNC.open()}});
-  const ov=curModal;if(ov){const obs=new MutationObserver(()=>{if(!ov.isConnected){mark();obs.disconnect()}});obs.observe(document.body,{childList:true})}}
+  if(seen)return;if(Object.keys(S.log).length||(window.MBSync&&MBSync.hasSavedSignIn())){markSeen();return}
+  wOpen()}
 
 /* ---------- share cards (kit v3 §6, MBShare): real data only, numbers hidden by default ---------- */
 function artEl(){const t=document.getElementById('shareArt');return t?t.content.firstElementChild:null}
@@ -1265,7 +1407,9 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(
     case 'sources':go('help');setTimeout(()=>{const el=$('#sources');el&&el.scrollIntoView()},50);break;
     case 'dbPick':if(DB)dbForm(+b.dataset.i);break;
     case 'inc':{const en=(S.log[cur]||[]).find(x=>x.id===id);if(!en)break;
-      if(en.kind==='drink'&&en.alc>0&&cur===todayKey()){addEntries([{...en,id:uid(),qty:1,t:Date.now()}],'Logged another '+en.name);break}
+      if(en.kind==='drink'&&en.alc>0&&cur===todayKey()){const src=findItem(en.ref),base={...en};delete base.dMin;
+        if(alcOn()){alcSheet(src&&S.drinks.includes(src)?src:{name:en.name,ml:en.ml,alc:en.alc},()=>({...base,id:uid(),qty:1,t:Date.now()}),'Logged another '+en.name);break}
+        addEntries([{...base,id:uid(),qty:1,t:Date.now()}],'Logged another '+en.name);break}
       stepEntry(id,en.kind==='drink'?1:0.25);break}
     case 'dec':stepEntry(id,(S.log[cur]||[]).find(x=>x.id===id)?.kind==='drink'?-1:-0.25);break;
     case 'editEntry':entryForm(id);break;
@@ -1282,6 +1426,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(
     case 'saveBackup':saveBackupNow();break;
     case 'exportJson':exportJson();break;
     case 'exportCsv':exportCsv();break;
+    case 'exportZip':exportZip();break;
+    case 'whatsNew':closeDataMenu();whatsNew();break;
     case 'import':startImport();break;
     case 'wipe':clearAll();break;
     case 'sync':closeDataMenu();if(SYNC)SYNC.open();break;
@@ -1301,13 +1447,17 @@ function syncApply(m){const list=pre=>Object.keys(m).filter(k=>k.startsWith(pre)
   for(const k of Object.keys(m)){if(k.startsWith('entry:')){const d=k.slice(6,16);if(DAY_RE.test(d)&&isObj(m[k]))(log[d]||(log[d]=[])).push(m[k])}else if(k.startsWith('supplog:')&&isObj(m[k]))suppLog[k.slice(8)]=m[k]}
   Object.values(log).forEach(L=>L.sort((a,b)=>(a.t||0)-(b.t||0)));
   S=normalize({v:2,settings:{...(isObj(m.settings)?m.settings:S.settings),lastBackup:S.settings.lastBackup},foods:list('food:'),drinks:list('drink:'),supps:list('supp:'),log,suppLog,template:'template' in m?m.template:S.template});
-  save();if(!curModal)render()}   // don't close a form someone is filling in
-function updateSyncUI(st){const t=$('#dmSyncTitle'),sub=$('#dmSyncSub');if(!t)return;
-  t.textContent=st.signedIn?'Sync: '+st.label:'Sync across devices…';sub.textContent=st.signedIn?st.email:'Optional free account. Your data stays on this device too'}
+  save();if(!curModal)render();   // don't close a form someone is filling in
+  /* signed in from the welcome screen and the log arrived: the person's data is here, so the welcome is done */
+  if(welcomeOpen()&&Object.keys(S.log).length){wClose();toast('Signed in. Your synced log is here.')}}
+/* sync status → Data lists (title, "Signed in as…", note, Clear all wording), backup chip (quiet while synced), welcome header */
+function updateSyncUI(){updateBackupStatus();if(welcomeOpen())wAcct()}
 const isDefaultItem=x=>/^[fd]_/.test(x.id);
-if(window.MBSync)SYNC=MBSync.create({app:'nutrition',label:'Nutrition',toRecords:syncRecords,fromRecords:syncApply,
+if(window.MBSync){SYNC=MBSync.create({app:'nutrition',label:'Nutrition',what:'your log, foods, drinks, recipes, supplements and targets',note:'Your theme and last-backup time stay on each device.',
+  toRecords:syncRecords,fromRecords:syncApply,
   hasData:()=>Object.keys(S.log).length>0||(S.supps||[]).length>0||S.foods.some(x=>!isDefaultItem(x))||S.drinks.some(x=>!isDefaultItem(x)),onStatus:updateSyncUI});
-else{const b=$('#dmSync');if(b)b.hidden=true}
+  SYNC.button($('#acctBtn'));window.addEventListener('mbsync:status',updateSyncUI)}
+else $('#acctBtn').hidden=true;
 
 function go(v){view=VIEWS[v]?v:'today';closeModal();closeDataMenu();render();window.scrollTo({top:0})}
 /* brand = home link (kit v3 §3) */
@@ -1321,10 +1471,10 @@ $('#dataMenu').addEventListener('keydown',e=>{const items=[...$('#dataMenu').que
 window.addEventListener('resize',()=>closeDataMenu());
 /* theme: light unless the user picked dark (addendum "Always load light") */
 function setTheme(t){document.documentElement.dataset.theme=t;try{localStorage.setItem(THEME_KEY,t)}catch(e){}$('#themeSw').setAttribute('aria-checked',String(t==='dark'));
-  document.querySelectorAll('[data-theme-pick]').forEach(r=>r.checked=r.value===t)}
+  document.querySelectorAll('[data-theme-set]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themeSet===t)))}
 $('#themeSw').setAttribute('aria-checked',String(document.documentElement.dataset.theme==='dark'));
 $('#themeSw').addEventListener('click',()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark'));
-document.addEventListener('change',e=>{if(e.target.matches('[data-theme-pick]'))setTheme(e.target.value)});
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-theme-set]');if(b)setTheme(b.dataset.themeSet)});
 document.addEventListener('change',e=>{const k=e.target.dataset.set;if(!k)return;const el=e.target,s=S.settings;
   if(el.type==='checkbox'&&!k.startsWith('alg:')&&!k.startsWith('diet:'))s[k]=el.checked;else if(k==='unit')s.unit=el.value;else if(k==='waterMl')s.waterMl=r0(fromUnit(el.value));else if(k==='weight')s.weightKg=el.value===''?null:(isOz()?num(el.value)*LB_KG:num(el.value));else if(k==='sex')s.sex=el.value;
   else if(k.startsWith('alg:')){const a=k.slice(4),l=new Set(s.allergens||[]);el.checked?l.add(a):l.delete(a);s.allergens=[...l]}
@@ -1332,6 +1482,7 @@ document.addEventListener('change',e=>{const k=e.target.dataset.set;if(!k)return
   else if(k==='winEnd'){s.winEnd=el.value.trim();if(s.winStart&&s.winEnd){const w=((hm(s.winEnd)-hm(s.winStart))%1440+1440)%1440;
     if(w===0)toast('Start and end are the same time. Pick a later end.');else{s.fastGoal=Math.round((1440-w)/60*100)/100;s.fastCustom=!FAST_PRESETS.includes(s.fastGoal)}}}
   else if(k==='avoidWords')s[k]=el.value.trim();
+  else if(k==='drinkMin')s.drinkMin=Math.max(1,Math.min(240,Math.round(num(el.value))||20));
   else if(['age','hft','hin','hcm','activity','bodyFat','formula','pace'].includes(k)){const pr=prof();
     if(k==='age')pr.age=el.value===''?null:Math.max(0,Math.min(110,Math.round(num(el.value))));else if(k==='activity')pr.activity=num(el.value);else if(k==='formula')pr.formula=el.value;
     else if(k==='pace')pr.rateKgWk=num(el.value);else if(k==='bodyFat')pr.bodyFat=num(el.value)>0?Math.max(3,Math.min(70,num(el.value))):null;
@@ -1344,7 +1495,11 @@ document.addEventListener('change',e=>{const k=e.target.dataset.set;if(!k)return
   else if(k==='fastHours'){s.fastGoal=Math.max(1,Math.min(23.75,Math.round(num(el.value)*4)/4));s.fastCustom=!FAST_PRESETS.includes(s.fastGoal);if(s.winStart)s.winEnd=addHM(s.winStart,r0((24-s.fastGoal)*60))}else s[k]=num(el.value);
   const fid=el.id;save();render();toast('Saved');if(fid){const n=document.getElementById(fid);n&&n.focus()}});
 /* keyboard: Esc closes the top layer, / opens search, Ctrl/Cmd+S saves a backup, Tab stays inside dialogs */
+function trapWelcome(e){const els=[...WEL.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select,[tabindex]:not([tabindex="-1"])')].filter(x=>x.offsetParent!==null);
+  if(!els.length)return;const a=els[0],z=els[els.length-1];
+  if(e.shiftKey&&(document.activeElement===a||!WEL.contains(document.activeElement))){e.preventDefault();z.focus()}else if(!e.shiftKey&&(document.activeElement===z||!WEL.contains(document.activeElement))){e.preventDefault();a.focus()}}
 document.addEventListener('keydown',e=>{
+  if(welcomeOpen()&&!(e.target.closest&&e.target.closest('dialog'))){if(e.key==='Escape'){e.preventDefault();wClose()}else if(e.key==='Tab')trapWelcome(e);return}
   if(e.key==='Escape'){if(curModal){e.preventDefault();const d=curModal.querySelector('.discard');if(d){d.remove();return}requestClose();return}if(!$('#dataMenu').hidden){closeDataMenu(true);return}}
   if(e.key==='Tab')trapTab(e);
   if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='s'){e.preventDefault();saveBackupNow();return}

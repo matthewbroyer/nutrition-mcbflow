@@ -2,6 +2,20 @@
 
 Newest first. One entry per release, in plain words a user would understand.
 
+## 1.9 · 2026-10-16
+- New Settings page with everything in one place, in the same order as the other mcbflow.com apps: Appearance, Account & sync, Nutrition settings (daily targets and drink units), Personalized targets, Tracking (fasting, supplements, caffeine, brand search, alcohol), Diet & allergies, Backup & data, Install and About.
+- An account button in the top bar: "Sign in", or your initial with a sync dot once you're signed in. New "Keep me signed in on this device" option; turn it off on a shared computer and you're signed out when the browser closes.
+- New welcome screen, the same look as the other apps: what the app does, pick a look, set your daily targets (calories, protein, hydration and drink units), then start logging. "Sign in to sync" and "Import a backup" are on it for moving from another device.
+- Clearer Data menu: every item has a one-line description. New Export All (ZIP): your full backup plus spreadsheets of your log, foods, drinks and supplements in one file. Import Backup reads the ZIP as well as the JSON. The CSV is still the log only, for spreadsheets.
+- Quieter backup reminders while you're signed in and syncing: the backup chip says "Synced" and the Data button loses its amber dot.
+- Every page ends with the same short footer: What's new, Privacy, Terms and More free apps. What's new opens these notes in the app.
+- Top bar controls are all the same height, and the name now reads "Nutrition ∙ mcbflow.com" ("Nutrition" on phones). The version line under the name was behind (it said 1.7); it now matches.
+- Your profile picture and screen name: choose them under Edit profile in the account dialog or on the Settings card. They show on the account button and in every mcbflow.com app you sign in to.
+- A short greeting on Home ("Good morning", with your first name when you're signed in).
+- The first tab is now called Home, and Settings has a gear icon. The day itself is still headed "Today".
+- Alcohol: log when you started or finished a drink and how long it took, for a steadier estimate. When you log an alcoholic drink, a small "When?" choice appears (Just started, Just finished or Earlier…) with how long it takes. The BAC estimate spreads that drink over that time, so the peak comes later and lower; it still clears at the same rate. Settings → Tracking has "Average time to finish a drink" (20 minutes to start; shots count as 1 minute). Drinks logged before this update are counted as before. The CSV has a new "drink_minutes" column.
+- Fix: on touchscreens, the first tap on a Week bar now shows its numbers and a second tap opens that day (the first tap used to jump straight to the day). The charts look the same.
+
 ## 1.8 · 2026-10-15
 - New: optional sync across devices. Data → Sync signs in with a free mcbflow.com account; your log, foods, drinks, recipes, supplements, usual day, targets and settings then match on every device you sign in on. Theme stays per device.
 - Everything still saves on this device first and works offline. Not signed in: nothing changes, and no account server is contacted.
@@ -9,7 +23,7 @@ Newest first. One entry per release, in plain words a user would understand.
 
 ## 1.7 · 2026-10-14
 
-- Moved to nutrition.mcbflow.com. Data saved at mbnutrition.online doesn't carry over: export a backup there and import it here. Storage names simplified.
+- Moved to nutrition.mcbflow.com. Data saved at the old address doesn't carry over: export a backup there and import it here. Storage names simplified.
 
 ## 1.6 · 2026-10-14
 
@@ -43,7 +57,7 @@ Newest first. One entry per release, in plain words a user would understand.
 ## 1.2 · 2026-10-14
 
 - If your age in Settings is under 21, everything about alcohol is hidden: beer, wine and spirits in your drinks and in food search, the alcohol total, the BAC chart, the Track alcohol switch and the alcohol notes on the Help page. Drinks you already logged stay in your history.
-- New macro colors shared with mbmealprep: protein red, carbs blue, fat gold. The fat part of the split bar now shows its own color instead of green.
+- New macro colors shared with Meal Prep: protein red, carbs blue, fat gold. The fat part of the split bar now shows its own color instead of green.
 
 ## 1.1 · 2026-10-14
 

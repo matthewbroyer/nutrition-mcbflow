@@ -1,4 +1,4 @@
-# Attributions · Nutrition (mbnutrition.online)
+# Attributions · Nutrition (nutrition.mcbflow.com)
 
 Made by Matthew Broyer. App code, icons, logo and OG image are original work unless listed below.
 
@@ -27,7 +27,7 @@ The Help page links to these as citations. The app never contacts them; they ope
 | www.nationalacademies.org | Water intake reference | https://www.nationalacademies.org |
 | www.niaaa.nih.gov | Standard drink definition | https://www.niaaa.nih.gov |
 | www.wisdoj.gov | Alcohol monograph (elimination rate) | https://www.wisdoj.gov |
-| mbmealprep.online | Matthew's own app; the body-type splits and calculator setup were adapted from it | https://mbmealprep.online |
+| mealprep.mcbflow.com | Matthew's own app; the body-type splits and calculator setup were adapted from it | https://mealprep.mcbflow.com |
 | matthewbroyer.com | Matthew's hub site (About card link) | https://matthewbroyer.com |
 
 ## Suite files

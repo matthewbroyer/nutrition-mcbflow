@@ -2,8 +2,8 @@
    Network-first for the app's own files, cache as the offline fallback. Never touches user data
    (localStorage / IndexedDB are not involved), never intercepts non-GET or cross-origin requests.
    BUMP VERSION ON EVERY RELEASE so old cached files are dropped. */
-const VERSION = 'nutrition-v1.8';
-const SHELL = ['./', 'index.html', 'manifest.json', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'mb-suite-core.css?v=1.8', 'mb-suite-cutouts.css?v=1.8', 'mb-suite-sidebar.css?v=1.8', 'mb-suite-v3.css?v=1.8', 'mb-suite-topbar.css?v=1.8', 'mb-title.js?v=1.8', 'mb-install.js?v=1.8', 'mb-share.js?v=1.8', 'mb-sync.js?v=1.8', 'vendor/supabase.js', 'app.js?v=1.8', 'privacy.html', 'terms.html', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'foods-db.json'];
+const VERSION = 'nutrition-v1.9';
+const SHELL = ['./', 'index.html', 'manifest.json', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'mb-suite-core.css?v=1.9', 'mb-suite-cutouts.css?v=1.9', 'mb-suite-sidebar.css?v=1.9', 'mb-suite-v3.css?v=1.9', 'mb-suite-topbar.css?v=1.9', 'mb-title.js?v=1.9', 'mb-install.js?v=1.9', 'mb-share.js?v=1.9', 'mb-sync.js?v=1.9', 'mb-files.js?v=1.9', 'vendor/supabase.js', 'app.js?v=1.9', 'privacy.html', 'terms.html', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'foods-db.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
